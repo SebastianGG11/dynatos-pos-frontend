@@ -1,0 +1,60 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+/* ============================
+   DARK MODE FORZADO GLOBAL
+   ============================ */
+
+html,
+body,
+#root {
+  width: 100%;
+  height: 100%;
+  margin: 0;
+  padding: 0;
+
+  background-color: #000000 !important;
+  color: #e5e5e5 !important;
+}
+
+/* Texto general */
+body {
+  font-family: system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI",
+    Roboto, Oxygen, Ubuntu, Cantarell, "Open Sans", "Helvetica Neue",
+    sans-serif;
+}
+
+/* Evitar blancos por defecto */
+* {
+  box-sizing: border-box;
+}
+
+/* Inputs */
+input,
+select,
+textarea {
+  background-color: #111 !important;
+  color: #e5e5e5 !important;
+  border: 1px solid #333 !important;
+}
+
+/* Botones base */
+button {
+  background-color: #111;
+  color: #e5e5e5;
+}
+
+/* Scrollbar (opcional, descanso visual) */
+::-webkit-scrollbar {
+  width: 8px;
+}
+::-webkit-scrollbar-track {
+  background: #000;
+}
+::-webkit-scrollbar-thumb {
+  background: #333;
+}
+::-webkit-scrollbar-thumb:hover {
+  background: #555;
+}
