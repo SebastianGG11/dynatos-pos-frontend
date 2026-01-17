@@ -13,7 +13,7 @@ export default function AdminAuthModal({ onSuccess, onCancel }) {
 
     try {
       const res = await axios.post(
-        "http://localhost:4000/auth/login",
+        "https://dynatos-pos-backend-1.onrender.com",
         { username, password }
       );
 
