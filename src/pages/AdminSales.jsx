@@ -1,5 +1,5 @@
 import { useState, useEffect } from "react";
-import api from "../api/api"; // ✅ Usamos la instancia centralizada para el token
+import api from "../api/api"; // ✅ Usamos la instancia centralizada
 import * as XLSX from "xlsx";
 import { FiSearch, FiDownload, FiPrinter } from "react-icons/fi";
 
@@ -13,12 +13,11 @@ export default function AdminSales() {
   const [selectedSale, setSelectedSale] = useState(null);
   const [isFetching, setIsFetching] = useState(false);
 
-  useEffect(() => { fetchSales(); }, [startDate, endDate]); // ✅ Recarga si cambian las fechas
+  useEffect(() => { fetchSales(); }, [startDate, endDate]);
 
   const fetchSales = async () => {
     setLoading(true);
     try {
-      // ✅ Usamos api.get para que el token se envíe automático
       const res = await api.get("/reports/sales", {
         params: { startDate, endDate }
       });
@@ -34,7 +33,6 @@ export default function AdminSales() {
   const handleRePrint = async (sale) => {
     setIsFetching(true);
     try {
-      // ✅ Solicitud limpia al backend
       const res = await api.get(`/sales/${sale.id}`);
       
       // Guardamos la venta con sus productos
@@ -43,24 +41,23 @@ export default function AdminSales() {
       // Pequeña espera para que el navegador "dibuje" la factura antes de imprimir
       setTimeout(() => {
         window.print();
-        setSelectedSale(null); // Limpiamos para no dejar basura en el DOM
+        setSelectedSale(null); 
       }, 500);
     } catch (error) {
       if (error.response?.status === 404) {
-        alert("⚠️ Error 404: El backend no encuentra el detalle de la venta. Asegúrate de haber actualizado el archivo 'sales.routes.js' y reiniciado el servidor.");
+        alert("⚠️ Error 404: Ruta no encontrada en backend.");
       } else {
-        alert("No se pudieron obtener los detalles de esta venta.");
+        alert("No se pudieron obtener los detalles.");
       }
     } finally {
       setIsFetching(false);
     }
   };
 
-  // Lógica de Impuesto (Mantenemos la matemática del 19% pero cambiamos la etiqueta)
+  // Lógica de Impuesto (Mantenemos la matemática pero cambiamos la etiqueta visual)
   const calculateTax = (total) => {
     const totalNum = Number(total);
-    // Si necesitas cambiar el % a 8% (Impoconsumo real), cambia 1.19 por 1.08
-    const valorImpuesto = totalNum - (totalNum / 1.19); 
+    const valorImpuesto = totalNum - (totalNum / 1.19); // 19% incluido
     const baseGravable = totalNum - valorImpuesto;
     return { baseGravable, valorImpuesto };
   };
@@ -74,16 +71,16 @@ export default function AdminSales() {
           <div style={{ width: "80mm", padding: "5mm", color: "#000", fontFamily: 'monospace', backgroundColor: '#fff' }}>
             <center>
               <h2 style={{ margin: 0, fontSize: '16px' }}>DYNATOS</h2>
-              <p style={{ margin: 0 }}>MARKET & LICORERÍA</p>
-              <p style={{ margin: 0, fontSize: '10px' }}>NIT: 900.XXX.XXX</p>
+              <p style={{ margin: 0, fontSize: '12px' }}>MARKET & LICORERÍA</p>
+              {/* ❌ NIT ELIMINADO POR SOLICITUD CLIENTE */}
               <p style={{ fontSize: '10px', marginTop: '5px' }}>REIMPRESIÓN / COPIA</p>
             </center>
-            <div style={{ marginTop: '10px', fontSize: '11px' }}>
+            <div style={{ marginTop: '15px', fontSize: '11px' }}>
               <p style={{ margin: 0 }}>FECHA: {new Date(selectedSale.created_at).toLocaleString()}</p>
               <p style={{ margin: 0 }}>CAJERO: {selectedSale.cajero}</p>
               <p style={{ margin: 0 }}>ORDEN: #{selectedSale.id}</p>
             </div>
-            <hr style={{ border: '0.5px dashed #000', margin: '5px 0' }} />
+            <hr style={{ border: '0.5px dashed #000', margin: '10px 0' }} />
             <table style={{ width: '100%', fontSize: '11px' }}>
               <thead>
                 <tr>
@@ -95,18 +92,19 @@ export default function AdminSales() {
               <tbody>
                 {selectedSale.items?.map((item, idx) => (
                   <tr key={idx}>
-                    <td>{item.name.substring(0,18)}</td>
-                    <td align="center">{item.quantity}</td>
-                    <td align="right">${(item.quantity * item.unit_price).toLocaleString()}</td>
+                    {/* ✅ NOMBRE COMPLETO (Sin recorte) */}
+                    <td style={{ paddingRight: '5px' }}>{item.name}</td>
+                    <td align="center" style={{ verticalAlign: 'top' }}>{item.quantity}</td>
+                    <td align="right" style={{ verticalAlign: 'top' }}>${(item.quantity * item.unit_price).toLocaleString()}</td>
                   </tr>
                 ))}
               </tbody>
             </table>
-            <hr style={{ border: '0.5px dashed #000', margin: '5px 0' }} />
+            <hr style={{ border: '0.5px dashed #000', margin: '10px 0' }} />
             <div style={{ textAlign: 'right', fontSize: '11px' }}>
               <p style={{ margin: 0 }}>BASE: ${calculateTax(selectedSale.total).baseGravable.toLocaleString(undefined, {maximumFractionDigits: 0})}</p>
               
-              {/* ✅ AQUÍ ESTÁ EL CAMBIO SOLICITADO */}
+              {/* ✅ CAMBIO A IC / IMPOCONSUMO */}
               <p style={{ margin: 0 }}>IC / IMPOCONSUMO: ${calculateTax(selectedSale.total).valorImpuesto.toLocaleString(undefined, {maximumFractionDigits: 0})}</p>
               
               <p style={{ fontSize: '16px', margin: '5px 0', fontWeight: 'bold' }}>
@@ -116,7 +114,7 @@ export default function AdminSales() {
             <div style={{ borderTop: '1px solid #000', marginTop: '5px', paddingTop: '5px', fontSize: '10px' }}>
                 <p style={{ margin: 0 }}>MÉTODO DE PAGO: {selectedSale.payment_method}</p>
             </div>
-            <center style={{ marginTop: '20px', fontSize: '9px' }}>
+            <center style={{ marginTop: '25px', fontSize: '9px' }}>
               *** GRACIAS POR SU COMPRA ***
             </center>
           </div>
