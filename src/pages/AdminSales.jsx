@@ -1,7 +1,7 @@
 import { useState, useEffect } from "react";
-import axios from "axios";
+import api from "../api/api"; // ✅ Usamos la instancia centralizada para el token
 import * as XLSX from "xlsx";
-import { FiSearch, FiDownload, FiPrinter, FiCalendar, FiArrowLeft } from "react-icons/fi";
+import { FiSearch, FiDownload, FiPrinter } from "react-icons/fi";
 
 export default function AdminSales() {
   const [sales, setSales] = useState([]);
@@ -13,16 +13,14 @@ export default function AdminSales() {
   const [selectedSale, setSelectedSale] = useState(null);
   const [isFetching, setIsFetching] = useState(false);
 
-  const API_URL = "https://dynatos-pos-backend-1.onrender.com/reports/sales";
-
-  useEffect(() => { fetchSales(); }, []);
+  useEffect(() => { fetchSales(); }, [startDate, endDate]); // ✅ Recarga si cambian las fechas
 
   const fetchSales = async () => {
     setLoading(true);
     try {
-      const res = await axios.get(API_URL, {
-        params: { startDate, endDate },
-        headers: { Authorization: `Bearer ${localStorage.getItem('token')}` }
+      // ✅ Usamos api.get para que el token se envíe automático
+      const res = await api.get("/reports/sales", {
+        params: { startDate, endDate }
       });
       setSales(res.data || []);
     } catch (error) {
@@ -36,11 +34,8 @@ export default function AdminSales() {
   const handleRePrint = async (sale) => {
     setIsFetching(true);
     try {
-      const token = localStorage.getItem('token');
-      // NOTA: Si esto da Error 404, debes crear la ruta GET /sales/:id en tu Backend
-      const res = await axios.get(`https://dynatos-pos-backend-1.onrender.com/sales/${sale.id}`, {
-        headers: { Authorization: `Bearer ${token}` }
-      });
+      // ✅ Solicitud limpia al backend
+      const res = await api.get(`/sales/${sale.id}`);
       
       // Guardamos la venta con sus productos
       setSelectedSale({ ...sale, items: res.data.items });
@@ -52,7 +47,7 @@ export default function AdminSales() {
       }, 500);
     } catch (error) {
       if (error.response?.status === 404) {
-        alert("⚠️ Error de Servidor (404): La ruta para consultar el detalle de la venta no existe en el Backend. Contacta al desarrollador para habilitar 'GET /sales/:id'.");
+        alert("⚠️ Error 404: El backend no encuentra el detalle de la venta. Asegúrate de haber actualizado el archivo 'sales.routes.js' y reiniciado el servidor.");
       } else {
         alert("No se pudieron obtener los detalles de esta venta.");
       }
@@ -61,38 +56,40 @@ export default function AdminSales() {
     }
   };
 
-  // Lógica de IVA para la reimpresión (19% incluido)
+  // Lógica de Impuesto (Mantenemos la matemática del 19% pero cambiamos la etiqueta)
   const calculateTax = (total) => {
     const totalNum = Number(total);
-    const valorIva = totalNum - (totalNum / 1.19);
-    const baseGravable = totalNum - valorIva;
-    return { baseGravable, valorIva };
+    // Si necesitas cambiar el % a 8% (Impoconsumo real), cambia 1.19 por 1.08
+    const valorImpuesto = totalNum - (totalNum / 1.19); 
+    const baseGravable = totalNum - valorImpuesto;
+    return { baseGravable, valorImpuesto };
   };
 
   return (
-    <div style={{ maxWidth: "1200px", margin: "0 auto", animation: "fadeIn 0.5s ease" }}>
+    <div style={{ maxWidth: "1200px", margin: "0 auto", animation: "fadeIn 0.5s ease", padding: "20px" }}>
       
       {/* 🧾 SECCIÓN DE IMPRESIÓN (OCULTA EN PANTALLA) */}
       <div id="print-section" style={{ display: "none" }}>
         {selectedSale && (
           <div style={{ width: "80mm", padding: "5mm", color: "#000", fontFamily: 'monospace', backgroundColor: '#fff' }}>
             <center>
-              <h2 style={{ margin: 0 }}>DYNATOS</h2>
-              <p style={{ margin: 0, fontSize: '12px' }}>MARKET & LICORERÍA</p>
-              <p style={{ fontSize: '10px', marginTop: '5px' }}>REIMPRESIÓN ADMINISTRATIVA</p>
+              <h2 style={{ margin: 0, fontSize: '16px' }}>DYNATOS</h2>
+              <p style={{ margin: 0 }}>MARKET & LICORERÍA</p>
+              <p style={{ margin: 0, fontSize: '10px' }}>NIT: 900.XXX.XXX</p>
+              <p style={{ fontSize: '10px', marginTop: '5px' }}>REIMPRESIÓN / COPIA</p>
             </center>
-            <div style={{ marginTop: '15px', fontSize: '11px' }}>
+            <div style={{ marginTop: '10px', fontSize: '11px' }}>
               <p style={{ margin: 0 }}>FECHA: {new Date(selectedSale.created_at).toLocaleString()}</p>
               <p style={{ margin: 0 }}>CAJERO: {selectedSale.cajero}</p>
               <p style={{ margin: 0 }}>ORDEN: #{selectedSale.id}</p>
             </div>
-            <hr style={{ border: '0.5px dashed #000', margin: '10px 0' }} />
+            <hr style={{ border: '0.5px dashed #000', margin: '5px 0' }} />
             <table style={{ width: '100%', fontSize: '11px' }}>
               <thead>
                 <tr>
                   <th align="left">DESC</th>
-                  <th align="center">CT</th>
-                  <th align="right">TOT</th>
+                  <th align="center">CANT</th>
+                  <th align="right">TOTAL</th>
                 </tr>
               </thead>
               <tbody>
@@ -105,16 +102,22 @@ export default function AdminSales() {
                 ))}
               </tbody>
             </table>
-            <hr style={{ border: '0.5px dashed #000', margin: '10px 0' }} />
+            <hr style={{ border: '0.5px dashed #000', margin: '5px 0' }} />
             <div style={{ textAlign: 'right', fontSize: '11px' }}>
-              <p style={{ margin: 0 }}>BASE GRAVABLE: ${calculateTax(selectedSale.total).baseGravable.toLocaleString(undefined, {maximumFractionDigits: 0})}</p>
-              <p style={{ margin: 0 }}>IVA (19%): ${calculateTax(selectedSale.total).valorIva.toLocaleString(undefined, {maximumFractionDigits: 0})}</p>
+              <p style={{ margin: 0 }}>BASE: ${calculateTax(selectedSale.total).baseGravable.toLocaleString(undefined, {maximumFractionDigits: 0})}</p>
+              
+              {/* ✅ AQUÍ ESTÁ EL CAMBIO SOLICITADO */}
+              <p style={{ margin: 0 }}>IC / IMPOCONSUMO: ${calculateTax(selectedSale.total).valorImpuesto.toLocaleString(undefined, {maximumFractionDigits: 0})}</p>
+              
               <p style={{ fontSize: '16px', margin: '5px 0', fontWeight: 'bold' }}>
                 TOTAL: ${Number(selectedSale.total).toLocaleString()}
               </p>
             </div>
-            <center style={{ marginTop: '25px', fontSize: '9px' }}>
-              -- Copia de Auditoría Interna --
+            <div style={{ borderTop: '1px solid #000', marginTop: '5px', paddingTop: '5px', fontSize: '10px' }}>
+                <p style={{ margin: 0 }}>MÉTODO DE PAGO: {selectedSale.payment_method}</p>
+            </div>
+            <center style={{ marginTop: '20px', fontSize: '9px' }}>
+              *** GRACIAS POR SU COMPRA ***
             </center>
           </div>
         )}
