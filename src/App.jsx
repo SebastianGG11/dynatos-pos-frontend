@@ -91,6 +91,7 @@ export default function App() {
         >
           <Route index element={<AdminHome />} />
           <Route path="productos" element={<AdminProducts />} />
+          <Route path="compras" element={<AdminPurchases />} />
           <Route path="promociones" element={<AdminPromotions />} />
           <Route path="usuarios" element={<AdminUsers />} />
           <Route path="ventas" element={<AdminSales />} />

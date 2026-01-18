@@ -18,6 +18,7 @@ const AdminSidebar = () => {
     { path: '/admin', icon: <FiHome />, label: 'Dashboard' },
     { path: '/admin/productos', icon: <FiPackage />, label: 'Productos' },
     { path: '/admin/promociones', icon: <FiTag />, label: 'Promociones' },
+    { path: '/admin/compras', icon: <FiTruck />, label: 'Compras' },
     { path: '/admin/usuarios', icon: <FiUsers />, label: 'Cajeros' },
     { path: '/admin/ventas', icon: <FiShoppingBag />, label: 'Ventas' },
   ];
