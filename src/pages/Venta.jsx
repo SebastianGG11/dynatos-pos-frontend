@@ -1,55 +1,52 @@
 import { useEffect, useMemo, useState } from "react";
 import api from "../api/api";
 import CerrarCaja from "./CerrarCaja";
-import { FiShoppingCart, FiCreditCard, FiDollarSign, FiUser } from "react-icons/fi";
+import { FiShoppingCart, FiUser, FiDollarSign, FiCreditCard } from "react-icons/fi";
 
 export default function Venta({ cashDrawer, onCashClosed }) {
   const [products, setProducts] = useState([]);
   const [categories, setCategories] = useState([]);
   const [selectedCategory, setSelectedCategory] = useState("ALL");
   const [cart, setCart] = useState([]);
-  const [sale, setSale] = useState(null); // Venta creada en BD
-  const [preview, setPreview] = useState(null); // Previsualización de precios
+  const [sale, setSale] = useState(null);
+  const [preview, setPreview] = useState(null);
   const [cashReceived, setCashReceived] = useState("");
   const [showQRConfirm, setShowQRConfirm] = useState(false);
   const [showCloseCash, setShowCloseCash] = useState(false);
   
-  // Estado para guardar los datos EXACTOS que saldrán en la factura
-  const [transactionDetails, setTransactionDetails] = useState(null);
+  // ESTADO PARA LA FACTURA FINAL (Recibido, Cambio, etc.)
+  const [receiptData, setReceiptData] = useState(null);
 
   // ---------------------------------------------------------
-  // 🕵️‍♂️ LÓGICA DE NOMBRE DE CAJERO (CORREGIDA)
+  // 🕵️‍♂️ LÓGICA DE EXTRACCIÓN DE NOMBRE (FUERZA BRUTA)
   // ---------------------------------------------------------
   const nombreCajero = useMemo(() => {
-    const extraerNombre = (data) => {
-      if (!data) return null;
-      // Caso 1: Es un objeto directo (React a veces ya lo parseó)
-      if (typeof data === 'object') {
-        return data.FULL_NAME || data.user_full_name || data.USERNAME || data.name;
-      }
-      // Caso 2: Es un string JSON
-      if (typeof data === 'string' && data.trim().startsWith('{')) {
+    // 1. Obtener el dato crudo de donde sea que venga
+    let raw = cashDrawer?.user_full_name || localStorage.getItem('user') || localStorage.getItem('user_data');
+    
+    if (!raw) return "Cajero General";
+
+    // 2. Si es un objeto real, devolvemos el nombre directo
+    if (typeof raw === 'object') return raw.FULL_NAME || raw.user_full_name || "Cajero";
+
+    // 3. Si es un string, intentamos limpiarlo
+    if (typeof raw === 'string') {
+      // Caso A: Es el JSON exacto que me mostraste {"ID":..., "FULL_NAME":"JHONIER"}
+      if (raw.includes("FULL_NAME")) {
         try {
-          const parsed = JSON.parse(data);
-          return parsed.FULL_NAME || parsed.user_full_name || parsed.USERNAME || parsed.name;
-        } catch { return null; }
+          const parsed = JSON.parse(raw);
+          return parsed.FULL_NAME;
+        } catch (e) {
+          // Si falla el parseo, intentamos regex para sacar el nombre a la fuerza
+          const match = raw.match(/"FULL_NAME":"([^"]+)"/);
+          if (match) return match[1];
+        }
       }
-      // Caso 3: Es un string normal
-      return data;
-    };
-
-    // Prioridad 1: Datos de la Caja (Backend)
-    let nombre = extraerNombre(cashDrawer?.user_full_name);
-    if (nombre) return nombre;
-
-    // Prioridad 2: LocalStorage (buscamos en todas las llaves posibles)
-    const llaves = ['user', 'user_data', 'usuario', 'auth'];
-    for (const key of llaves) {
-      nombre = extraerNombre(localStorage.getItem(key));
-      if (nombre) return nombre;
+      // Caso B: Es un nombre normal
+      return raw;
     }
 
-    return "Cajero General";
+    return "Cajero (Default)";
   }, [cashDrawer]);
   // ---------------------------------------------------------
 
@@ -60,7 +57,7 @@ export default function Venta({ cashDrawer, onCashClosed }) {
       const [catRes, prodRes] = await Promise.all([api.get("/categories"), api.get("/products")]);
       setCategories(catRes.data?.items ?? []);
       setProducts(prodRes.data?.items ?? []);
-    } catch { console.error("Error cargando datos"); }
+    } catch { console.error("Error datos"); }
   };
 
   const filteredProducts = selectedCategory === "ALL" ? products : products.filter(p => p.category_id === selectedCategory);
@@ -86,9 +83,14 @@ export default function Venta({ cashDrawer, onCashClosed }) {
 
   const decreaseQty = (id) => setCart(prev => prev.map(p => p.id === id ? { ...p, qty: p.qty - 1 } : p).filter(p => p.qty > 0));
 
-  const clearCart = () => { setCart([]); setSale(null); setPreview(null); setCashReceived(""); setTransactionDetails(null); };
+  const clearCart = () => { 
+    setCart([]); 
+    setSale(null); 
+    setPreview(null); 
+    setCashReceived(""); 
+    setReceiptData(null); 
+  };
 
-  // Previsualización de Totales y Descuentos
   useEffect(() => {
     if (cart.length === 0) { setPreview(null); return; }
     const fetchPreview = async () => {
@@ -105,25 +107,27 @@ export default function Venta({ cashDrawer, onCashClosed }) {
   const valorIva = total - (total / (1 + tasaIva));
   const baseGravable = total - valorIva;
 
-  // 🖨️ Función Finalizar: Prepara los datos para la impresión
-  const finalizeTransaction = (method, receivedAmount, changeAmount) => {
-    setTransactionDetails({
+  // === LÓGICA DE FINALIZACIÓN DE VENTA E IMPRESIÓN ===
+  const finalizeTransaction = (method, received, change) => {
+    // 1. Guardamos los datos para la tirilla
+    setReceiptData({
       id: sale.id,
       date: new Date().toLocaleString(),
       cajero: nombreCajero,
-      items: cart,
+      items: [...cart],
       subtotal: baseGravable,
       iva: valorIva,
       total: total,
-      method: method,       // "EFECTIVO" o "TRANSFERENCIA"
-      received: receivedAmount, // Cuánto entregó el cliente
-      change: changeAmount     // Cuánto se devolvió
+      method: method,
+      received: received,
+      change: change
     });
 
-    // Pequeño delay para que React actualice el DOM de la factura antes de imprimir
+    // 2. Esperamos a que React renderice la tirilla y luego imprimimos
     setTimeout(() => {
       window.print();
-      clearCart();
+      // 3. Limpiamos TODO después de imprimir
+      clearCart(); 
       loadAll();
     }, 500);
   };
@@ -132,53 +136,50 @@ export default function Venta({ cashDrawer, onCashClosed }) {
     try {
       const res = await api.post("/sales", { cash_drawer_id: cashDrawer.id, customer_name: "Cliente Mostrador", items: cart.map(i => ({ product_id: i.id, quantity: i.qty })) });
       setSale(res.data.sale);
-    } catch { alert("Error al registrar venta"); }
+    } catch { alert("Error al registrar venta. Intente de nuevo."); }
   };
 
   const payCash = async () => {
     const received = Number(cashReceived);
     if (received < total) { alert("Monto insuficiente"); return; }
+    
     try {
       await api.post("/payments/cash", { sale_id: sale.id, amount: total });
       const change = received - total;
-      alert(`Cambio a devolver: $${change.toLocaleString()}`);
-      
-      // Pasamos los datos al recibo
+      alert(`✅ Venta Exitosa\n\nCambio a devolver: $${change.toLocaleString()}`);
       finalizeTransaction("EFECTIVO", received, change);
-    } catch { alert("Error en pago"); }
+    } catch { alert("Error procesando el pago"); }
   };
 
   const confirmQRPayment = async () => {
     try {
       await api.post("/payments/qr", { sale_id: sale.id, amount: total, provider: "NEQUI" });
       setShowQRConfirm(false);
-      
-      // En QR, recibido es igual al total y cambio es 0
       finalizeTransaction("TRANSFERENCIA / QR", total, 0);
-    } catch { alert("Error en QR"); }
+    } catch { alert("Error procesando pago QR"); }
   };
 
   return (
     <div style={{ display: "flex", height: "100vh", backgroundColor: "#000", overflow: "hidden" }}>
       
-      {/* 🧾 TIRILLA TÉRMICA (Invisible en pantalla, visible al imprimir) */}
+      {/* 🧾 TIRILLA TÉRMICA (Invisible hasta imprimir) */}
       <div id="print-area" style={{ display: "none" }}>
-        {transactionDetails && (
+        {receiptData && (
           <div style={{ width: "80mm", padding: "5mm", color: "#000", fontFamily: 'monospace', backgroundColor: '#fff', fontSize: '11px' }}>
             <center>
               <h2 style={{ margin: 0, fontSize: '16px' }}>DYNATOS</h2>
               <p style={{ margin: 0 }}>MARKET & LICORERÍA</p>
-              <p style={{ margin: '5px 0' }}>NIT: 900.XXX.XXX</p>
+              <p style={{ margin: 0, fontSize: '10px' }}>NIT: 900.XXX.XXX</p>
             </center>
-            <div style={{ margin: '10px 0' }}>
-              <p style={{ margin: 0 }}>FECHA: {transactionDetails.date}</p>
-              <p style={{ margin: 0 }}>ORDEN: #{transactionDetails.id}</p>
-              <p style={{ margin: 0 }}>CAJERO: {String(transactionDetails.cajero).toUpperCase()}</p>
+            <div style={{ marginTop: '10px', marginBottom: '5px' }}>
+              <p style={{ margin: 0 }}>FECHA: {receiptData.date}</p>
+              <p style={{ margin: 0 }}>ORDEN: #{receiptData.id}</p>
+              <p style={{ margin: 0 }}>CAJERO: {String(receiptData.cajero).toUpperCase()}</p>
             </div>
             <hr style={{ border: '0.5px dashed #000', margin: '5px 0' }} />
-            <table style={{ width: '100%' }}>
+            <table style={{ width: '100%', fontSize: '11px' }}>
               <tbody>
-                {transactionDetails.items.map(i => (
+                {receiptData.items.map(i => (
                   <tr key={i.id}>
                     <td>{i.qty} x {i.name.substring(0,18)}</td>
                     <td align="right">${(i.qty * i.sale_price).toLocaleString()}</td>
@@ -187,29 +188,29 @@ export default function Venta({ cashDrawer, onCashClosed }) {
               </tbody>
             </table>
             <hr style={{ border: '0.5px dashed #000', margin: '5px 0' }} />
+            
             <div style={{ textAlign: 'right' }}>
-              <p style={{ margin: 0 }}>SUBTOTAL: ${transactionDetails.subtotal.toLocaleString(undefined, {maximumFractionDigits:0})}</p>
-              <p style={{ margin: 0 }}>IVA (19%): ${transactionDetails.iva.toLocaleString(undefined, {maximumFractionDigits:0})}</p>
-              <h2 style={{ margin: '5px 0', fontSize: '16px' }}>TOTAL: ${transactionDetails.total.toLocaleString()}</h2>
+              <p style={{ margin: 0 }}>SUBTOTAL: ${receiptData.subtotal.toLocaleString(undefined, {maximumFractionDigits:0})}</p>
+              <p style={{ margin: 0 }}>IVA (19%): ${receiptData.iva.toLocaleString(undefined, {maximumFractionDigits:0})}</p>
+              <h2 style={{ margin: '5px 0', fontSize: '16px' }}>TOTAL: ${receiptData.total.toLocaleString()}</h2>
             </div>
             
-            {/* RESUMEN DE PAGO SOLICITADO */}
-            <div style={{ borderTop: '1px solid #000', paddingTop: '5px', marginTop: '5px' }}>
-              <p style={{ margin: 0, fontWeight: 'bold' }}>MÉTODO DE PAGO:</p>
-              <p style={{ margin: 0 }}>{transactionDetails.method}</p>
-              <div style={{ display: 'flex', justifyContent: 'space-between', marginTop: '5px' }}>
+            {/* === SECCIÓN DE RESUMEN DE PAGO === */}
+            <div style={{ borderTop: '1px solid #000', marginTop: '10px', paddingTop: '5px' }}>
+              <p style={{ margin: 0, fontWeight: 'bold' }}>MÉTODO: {receiptData.method}</p>
+              <div style={{ display: 'flex', justifyContent: 'space-between', marginTop: '3px' }}>
                 <span>RECIBIDO:</span>
-                <span>${transactionDetails.received.toLocaleString()}</span>
+                <span>${receiptData.received.toLocaleString()}</span>
               </div>
-              <div style={{ display: 'flex', justifyContent: 'space-between', fontWeight: 'bold' }}>
+              <div style={{ display: 'flex', justifyContent: 'space-between', fontWeight: 'bold', marginTop: '3px' }}>
                 <span>CAMBIO:</span>
-                <span>${transactionDetails.change.toLocaleString()}</span>
+                <span>${receiptData.change.toLocaleString()}</span>
               </div>
             </div>
 
-            <center style={{ marginTop: '15px', fontSize: '10px' }}>
+            <center style={{ marginTop: '20px', fontSize: '10px' }}>
               *** GRACIAS POR SU COMPRA ***<br/>
-              Régimen Común
+              Sistema Dynatos POS
             </center>
           </div>
         )}
@@ -287,7 +288,7 @@ export default function Venta({ cashDrawer, onCashClosed }) {
       {showQRConfirm && (
         <div style={{ position: "fixed", inset: 0, background: "rgba(0,0,0,0.9)", display: "flex", alignItems: "center", justifyContent: "center", zIndex: 1000 }}>
           <div style={{ background: "#111", padding: "40px", borderRadius: "20px", border: "1px solid #D4AF37", textAlign: "center", maxWidth: '350px' }}>
-            <p style={{ color: "#fff", marginBottom: "30px" }}>¿Confirmas el pago?</p>
+            <p style={{ color: "#fff", marginBottom: "30px" }}>¿El cliente ya realizó la transferencia?</p>
             <div style={{ display: "flex", gap: "15px" }}>
               <button onClick={() => setShowQRConfirm(false)} style={{ flex: 1, padding: "12px", background: "#222", color: "#888", border: "none", borderRadius: '8px', cursor: 'pointer' }}>NO, VOLVER</button>
               <button onClick={confirmQRPayment} style={{ flex: 1, padding: "12px", background: "#D4AF37", color: "#000", border: "none", borderRadius: '8px', fontWeight: "bold", cursor: 'pointer' }}>SÍ, PAGADO</button>
