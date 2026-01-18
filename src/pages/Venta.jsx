@@ -17,26 +17,30 @@ export default function Venta({ cashDrawer, onCashClosed }) {
 
   // ✅ Nombre dinámico del cajero
   // Lógica para extraer el nombre real sin el formato de código
-const nombreCajero = useMemo(() => {
-  // 1. Intentamos obtenerlo del cashDrawer que viene del backend
-  if (cashDrawer?.user_full_name) return cashDrawer.user_full_name;
-
-  // 2. Si no, buscamos en el localStorage lo que guardó el login
-  const userDataRaw = localStorage.getItem('user') || localStorage.getItem('user_data');
-  
-  if (userDataRaw) {
+// Lógica BLINDADA para obtener el nombre
+  const nombreCajero = useMemo(() => {
     try {
-      // Intentamos procesar si es un objeto JSON (como el que te sale a ti)
-      const userData = JSON.parse(userDataRaw);
-      return userData.FULL_NAME || userData.user_name || "Cajero Junior";
-    } catch (e) {
-      // Si no es un JSON, lo devolvemos tal cual
-      return userDataRaw;
-    }
-  }
+      // 1. Buscamos la data cruda en el localStorage (puede llamarse 'user', 'user_data', etc.)
+      const rawData = localStorage.getItem('user') || localStorage.getItem('user_data');
+      
+      if (rawData) {
+        // Intentamos convertir ese texto {"ID":...} en un objeto real
+        const parsed = JSON.parse(rawData);
+        // Si tiene FULL_NAME (como en tu ejemplo), lo usamos
+        if (parsed.FULL_NAME) return parsed.FULL_NAME;
+        if (parsed.user_name) return parsed.user_name;
+        if (parsed.name) return parsed.name;
+      }
+      
+      // 2. Si no estaba en el storage, miramos si viene en la caja
+      if (cashDrawer?.user_full_name) return cashDrawer.user_full_name;
 
-  return "Cajero General";
-}, [cashDrawer]);
+    } catch (e) {
+      console.error("Error leyendo nombre:", e);
+    }
+
+    return "Cajero (Sin Nombre)";
+  }, [cashDrawer]);
 
   useEffect(() => { loadAll(); }, []);
 
