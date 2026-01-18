@@ -37,6 +37,7 @@ export default function AdminSales() {
     setIsFetching(true);
     try {
       const token = localStorage.getItem('token');
+      // NOTA: Si esto da Error 404, debes crear la ruta GET /sales/:id en tu Backend
       const res = await axios.get(`https://dynatos-pos-backend-1.onrender.com/sales/${sale.id}`, {
         headers: { Authorization: `Bearer ${token}` }
       });
@@ -50,10 +51,22 @@ export default function AdminSales() {
         setSelectedSale(null); // Limpiamos para no dejar basura en el DOM
       }, 500);
     } catch (error) {
-      alert("No se pudieron obtener los detalles de esta venta.");
+      if (error.response?.status === 404) {
+        alert("⚠️ Error de Servidor (404): La ruta para consultar el detalle de la venta no existe en el Backend. Contacta al desarrollador para habilitar 'GET /sales/:id'.");
+      } else {
+        alert("No se pudieron obtener los detalles de esta venta.");
+      }
     } finally {
       setIsFetching(false);
     }
+  };
+
+  // Lógica de IVA para la reimpresión (19% incluido)
+  const calculateTax = (total) => {
+    const totalNum = Number(total);
+    const valorIva = totalNum - (totalNum / 1.19);
+    const baseGravable = totalNum - valorIva;
+    return { baseGravable, valorIva };
   };
 
   return (
@@ -75,27 +88,38 @@ export default function AdminSales() {
             </div>
             <hr style={{ border: '0.5px dashed #000', margin: '10px 0' }} />
             <table style={{ width: '100%', fontSize: '11px' }}>
+              <thead>
+                <tr>
+                  <th align="left">DESC</th>
+                  <th align="center">CT</th>
+                  <th align="right">TOT</th>
+                </tr>
+              </thead>
               <tbody>
                 {selectedSale.items?.map((item, idx) => (
                   <tr key={idx}>
-                    <td>{item.quantity} x {item.name.substring(0,20)}</td>
+                    <td>{item.name.substring(0,18)}</td>
+                    <td align="center">{item.quantity}</td>
                     <td align="right">${(item.quantity * item.unit_price).toLocaleString()}</td>
                   </tr>
                 ))}
               </tbody>
             </table>
             <hr style={{ border: '0.5px dashed #000', margin: '10px 0' }} />
-            <div style={{ textAlign: 'right', fontWeight: 'bold', fontSize: '14px' }}>
-              TOTAL: ${Number(selectedSale.total).toLocaleString()}
+            <div style={{ textAlign: 'right', fontSize: '11px' }}>
+              <p style={{ margin: 0 }}>BASE GRAVABLE: ${calculateTax(selectedSale.total).baseGravable.toLocaleString(undefined, {maximumFractionDigits: 0})}</p>
+              <p style={{ margin: 0 }}>IVA (19%): ${calculateTax(selectedSale.total).valorIva.toLocaleString(undefined, {maximumFractionDigits: 0})}</p>
+              <p style={{ fontSize: '16px', margin: '5px 0', fontWeight: 'bold' }}>
+                TOTAL: ${Number(selectedSale.total).toLocaleString()}
+              </p>
             </div>
             <center style={{ marginTop: '25px', fontSize: '9px' }}>
-              -- Copia de Auditoría --
+              -- Copia de Auditoría Interna --
             </center>
           </div>
         )}
       </div>
 
-      {/* CSS para la impresión */}
       <style>{`
         @media print {
           body * { visibility: hidden; }

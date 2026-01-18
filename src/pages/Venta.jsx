@@ -16,12 +16,27 @@ export default function Venta({ cashDrawer, onCashClosed }) {
   const [showCloseCash, setShowCloseCash] = useState(false);
 
   // ✅ Nombre dinámico del cajero
-  const nombreCajero = cashDrawer?.user_full_name || 
-                     localStorage.getItem('user_full_name') || 
-                     localStorage.getItem('full_name') || 
-                     localStorage.getItem('user') || 
-                     localStorage.getItem('username') || 
-                     "Cajer@";
+  // Lógica para extraer el nombre real sin el formato de código
+const nombreCajero = useMemo(() => {
+  // 1. Intentamos obtenerlo del cashDrawer que viene del backend
+  if (cashDrawer?.user_full_name) return cashDrawer.user_full_name;
+
+  // 2. Si no, buscamos en el localStorage lo que guardó el login
+  const userDataRaw = localStorage.getItem('user') || localStorage.getItem('user_data');
+  
+  if (userDataRaw) {
+    try {
+      // Intentamos procesar si es un objeto JSON (como el que te sale a ti)
+      const userData = JSON.parse(userDataRaw);
+      return userData.FULL_NAME || userData.user_name || "Cajero Junior";
+    } catch (e) {
+      // Si no es un JSON, lo devolvemos tal cual
+      return userDataRaw;
+    }
+  }
+
+  return "Cajero General";
+}, [cashDrawer]);
 
   useEffect(() => { loadAll(); }, []);
 
