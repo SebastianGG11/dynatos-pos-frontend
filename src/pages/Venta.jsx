@@ -1,7 +1,7 @@
 import { useEffect, useMemo, useState } from "react";
 import api from "../api/api";
 import CerrarCaja from "./CerrarCaja";
-import { FiShoppingCart, FiTrash2, FiPlus, FiMinus, FiCreditCard, FiDollarSign, FiX } from "react-icons/fi";
+import { FiShoppingCart, FiTrash2, FiPlus, FiMinus, FiCreditCard, FiDollarSign } from "react-icons/fi";
 
 export default function Venta({ cashDrawer, onCashClosed }) {
   const [products, setProducts] = useState([]);
@@ -22,12 +22,12 @@ export default function Venta({ cashDrawer, onCashClosed }) {
       const [catRes, prodRes] = await Promise.all([api.get("/categories"), api.get("/products")]);
       setCategories(catRes.data?.items ?? []);
       setProducts(prodRes.data?.items ?? []);
-    } catch { alert("Error cargando productos"); }
+    } catch { console.error("Error cargando productos"); }
   };
 
   const categoryNameById = useMemo(() => {
     const map = new Map();
-    categories.forEach(c => map.set(c.id, c.name ?? `Categoría ${c.id}`));
+    categories.forEach(c => map.set(c.id, c.name));
     return map;
   }, [categories]);
 
@@ -82,8 +82,11 @@ export default function Venta({ cashDrawer, onCashClosed }) {
   const promoDiscount = preview?.promo_discount_total ?? 0;
   const total = preview?.total ?? subtotal;
 
-  const handlePrintAndClear = () => {
-    window.print();
+  // ==========================================
+  // LÓGICA DE FINALIZACIÓN (PAGO + IMPRESIÓN)
+  // ==========================================
+  const finishSale = () => {
+    window.print(); // Dispara la tirilla diseñada abajo
     clearCart();
     loadAll();
   };
@@ -106,67 +109,83 @@ export default function Venta({ cashDrawer, onCashClosed }) {
     if (received < total) { alert("Monto insuficiente"); return; }
     try {
       await api.post("/payments/cash", { sale_id: sale.id, amount: total });
-      alert(`Venta exitosa. Cambio: $${(received - total).toLocaleString()}`);
-      handlePrintAndClear();
-    } catch { alert("Error en pago"); }
+      finishSale();
+    } catch { alert("Error en el pago"); }
   };
 
   const confirmQRPayment = async () => {
     try {
       await api.post("/payments/qr", { sale_id: sale.id, amount: total, provider: "NEQUI" });
-      handlePrintAndClear();
-    } catch { alert("Error en pago"); }
+      setShowQRConfirm(false); // 1. Cerramos el modal inmediatamente
+      setTimeout(() => { finishSale(); }, 300); // 2. Esperamos un poco y disparamos impresión
+    } catch { alert("Error confirmando pago QR"); }
   };
 
   return (
     <div style={{ display: "flex", height: "100vh", backgroundColor: "#000", overflow: "hidden" }}>
       
-      {/* 🧾 TIRILLA DE VENTA (SOLO IMPRESIÓN) */}
-      <div id="print-section" style={{ display: "none" }}>
-        <div style={{ width: "80mm", padding: "10px", color: "#000", fontFamily: "monospace" }}>
+      {/* 🧾 FACTURA TIPO TIRILLA (OCULTA EN WEB, VISIBLE AL IMPRIMIR) */}
+      <div id="factura-tirilla" style={{ display: "none" }}>
+        <div style={{ width: "80mm", padding: "5mm", color: "#000", fontFamily: 'monospace', backgroundColor: '#fff' }}>
           <center>
             <h2 style={{ margin: 0 }}>DYNATOS</h2>
-            <p style={{ fontSize: "12px" }}>MARKET & LICORERÍA</p>
+            <p style={{ margin: 0, fontSize: '12px' }}>MARKET & LICORERÍA</p>
+            <p style={{ fontSize: '10px' }}>Calle Principal - Caquetá</p>
           </center>
-          <hr />
-          <p>FECHA: {new Date().toLocaleString()}</p>
-          <p>CAJA: {cashDrawer.id}</p>
-          <hr />
-          {cart.map(i => (
-            <div key={i.id} style={{ display: "flex", justifyContent: "space-between" }}>
-              <span>{i.qty} x {i.name.substring(0,15)}</span>
-              <span>${(i.qty * i.sale_price).toLocaleString()}</span>
-            </div>
-          ))}
-          <hr />
-          <div style={{ textAlign: "right", fontWeight: "bold", fontSize: "16px" }}>
-            TOTAL: ${total.toLocaleString()}
+          <div style={{ marginTop: '15px', fontSize: '11px' }}>
+            <p style={{ margin: 0 }}>FECHA: {new Date().toLocaleDateString()}</p>
+            <p style={{ margin: 0 }}>HORA: {new Date().toLocaleTimeString()}</p>
+            <p style={{ margin: 0 }}>CAJERO: {cashDrawer.user_name || 'Admin'}</p>
+            <p style={{ margin: 0 }}>TRANS: #{sale?.id || '000'}</p>
           </div>
-          <center style={{ marginTop: "20px", fontSize: "10px" }}>Gracias por su compra</center>
+          <hr style={{ border: '0.5px dashed #000', margin: '10px 0' }} />
+          <table style={{ width: '100%', fontSize: '11px' }}>
+            <thead>
+              <tr><th align="left">DESCRIPCIÓN</th><th align="center">CT</th><th align="right">SUB</th></tr>
+            </thead>
+            <tbody>
+              {cart.map(i => (
+                <tr key={i.id}>
+                  <td>{i.name.substring(0,18)}</td>
+                  <td align="center">{i.qty}</td>
+                  <td align="right">${(i.qty * i.sale_price).toLocaleString()}</td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+          <hr style={{ border: '0.5px dashed #000', margin: '10px 0' }} />
+          <div style={{ textAlign: 'right', fontWeight: 'bold' }}>
+            <p style={{ margin: 0 }}>SUBTOTAL: ${subtotal.toLocaleString()}</p>
+            {promoDiscount > 0 && <p style={{ margin: 0, color: '#000' }}>DESC: -${promoDiscount.toLocaleString()}</p>}
+            <p style={{ fontSize: '16px', margin: '5px 0' }}>TOTAL: ${total.toLocaleString()}</p>
+          </div>
+          <center style={{ marginTop: '20px', fontSize: '10px' }}>
+            *** Gracias por su compra ***
+          </center>
         </div>
       </div>
 
       <style>{`
         @media print {
-          body * { display: none !important; }
-          #print-section, #print-section * { display: block !important; }
-          #print-section { position: absolute; left: 0; top: 0; width: 100%; }
+          body * { visibility: hidden; }
+          #factura-tirilla, #factura-tirilla * { visibility: visible; }
+          #factura-tirilla { position: absolute; left: 0; top: 0; width: 100%; display: block !important; }
         }
       `}</style>
 
-      {/* 1. SIDEBAR CATEGORÍAS (Fijo) */}
+      {/* 1. SIDEBAR CATEGORÍAS */}
       <div style={{ width: "200px", borderRight: "1px solid #D4AF37", padding: "20px", display: "flex", flexDirection: "column" }}>
-        <h3 style={{ color: "#D4AF37", fontSize: "0.8rem", marginBottom: "20px" }}>CATEGORÍAS</h3>
+        <h3 style={{ color: "#D4AF37", fontSize: "0.8rem", marginBottom: "20px", letterSpacing: '1px' }}>CATEGORÍAS</h3>
         <div style={{ flex: 1, overflowY: "auto" }}>
-          <button onClick={() => setSelectedCategory("ALL")} style={{ width: "100%", padding: "10px", marginBottom: "10px", borderRadius: "8px", border: "1px solid #333", color: selectedCategory === "ALL" ? "#000" : "#fff", backgroundColor: selectedCategory === "ALL" ? "#D4AF37" : "transparent", fontWeight: "bold" }}>TODAS</button>
+          <button onClick={() => setSelectedCategory("ALL")} style={{ width: "100%", padding: "12px", marginBottom: "10px", borderRadius: "8px", border: "1px solid #333", color: selectedCategory === "ALL" ? "#000" : "#fff", backgroundColor: selectedCategory === "ALL" ? "#D4AF37" : "transparent", fontWeight: "bold", cursor: 'pointer' }}>TODAS</button>
           {categories.map(c => (
-            <button key={c.id} onClick={() => setSelectedCategory(c.id)} style={{ width: "100%", padding: "10px", marginBottom: "10px", borderRadius: "8px", border: "1px solid #333", color: selectedCategory === c.id ? "#000" : "#fff", backgroundColor: selectedCategory === c.id ? "#D4AF37" : "transparent" }}>{c.name.toUpperCase()}</button>
+            <button key={c.id} onClick={() => setSelectedCategory(c.id)} style={{ width: "100%", padding: "10px", marginBottom: "10px", borderRadius: "8px", border: "1px solid #333", color: selectedCategory === c.id ? "#000" : "#fff", backgroundColor: selectedCategory === c.id ? "#D4AF37" : "transparent", cursor: 'pointer' }}>{c.name.toUpperCase()}</button>
           ))}
         </div>
         <button onClick={() => setShowCloseCash(true)} style={{ padding: "12px", background: "#f44", color: "#fff", border: "none", borderRadius: "8px", fontWeight: "bold", cursor: "pointer" }}>CERRAR CAJA</button>
       </div>
 
-      {/* 2. GRILLA PRODUCTOS (Scroll independiente) */}
+      {/* 2. GRILLA PRODUCTOS */}
       <div style={{ flex: 1, padding: "30px", overflowY: "auto" }}>
         <h1 style={{ color: "#D4AF37", fontFamily: "serif", marginBottom: "30px", letterSpacing: "2px" }}>PRODUCTOS</h1>
         <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fill, minmax(180px, 1fr))", gap: "15px" }}>
@@ -180,56 +199,54 @@ export default function Venta({ cashDrawer, onCashClosed }) {
         </div>
       </div>
 
-      {/* 3. CARRITO Y PAGO (Fijo, sin scroll externo) */}
-      <div style={{ width: "350px", borderLeft: "1px solid #222", display: "flex", flexDirection: "column", backgroundColor: "#111" }}>
+      {/* 3. CARRITO Y PAGO (FIJO) */}
+      <div style={{ width: "380px", borderLeft: "1px solid #222", display: "flex", flexDirection: "column", backgroundColor: "#111" }}>
         <div style={{ padding: "20px", borderBottom: "1px solid #222" }}>
-          <h2 style={{ color: "#D4AF37", display: "flex", alignItems: "center", gap: "10px" }}><FiShoppingCart /> CARRITO</h2>
+          <h2 style={{ color: "#D4AF37", display: "flex", alignItems: "center", gap: "10px", margin: 0 }}><FiShoppingCart /> CARRITO</h2>
         </div>
 
-        {/* Lista de productos con scroll interno */}
         <div style={{ flex: 1, overflowY: "auto", padding: "20px" }}>
           {cart.map(i => (
             <div key={i.id} style={{ display: "flex", justifyContent: "space-between", marginBottom: "15px", fontSize: "0.9rem" }}>
-              <div style={{ flex: 1 }}>{i.name}</div>
-              <div style={{ display: "flex", alignItems: "center", gap: "8px", margin: "0 10px" }}>
-                <button onClick={() => decreaseQty(i.id)} style={{ background: "#222", border: "none", color: "#fff", borderRadius: "4px", width: "24px" }}>-</button>
+              <div style={{ flex: 1, color: '#eee' }}>{i.name}</div>
+              <div style={{ display: "flex", alignItems: "center", gap: "8px", margin: "0 10px", color: '#fff' }}>
+                <button onClick={() => decreaseQty(i.id)} style={{ background: "#222", border: "none", color: "#fff", borderRadius: "4px", width: "24px", cursor: 'pointer' }}>-</button>
                 <span>{i.qty}</span>
-                <button onClick={() => increaseQty(i.id)} style={{ background: "#222", border: "none", color: "#fff", borderRadius: "4px", width: "24px" }}>+</button>
+                <button onClick={() => increaseQty(i.id)} style={{ background: "#222", border: "none", color: "#fff", borderRadius: "4px", width: "24px", cursor: 'pointer' }}>+</button>
               </div>
-              <div style={{ fontWeight: "bold" }}>${(i.qty * i.sale_price).toLocaleString()}</div>
+              <div style={{ fontWeight: "bold", color: '#D4AF37' }}>${(i.qty * i.sale_price).toLocaleString()}</div>
             </div>
           ))}
         </div>
 
-        {/* ÁREA DE PAGO FIJA (Siempre visible) */}
-        <div style={{ padding: "20px", backgroundColor: "#161616", borderTop: "2px solid #D4AF37" }}>
-          <div style={{ display: "flex", justifyContent: "space-between", marginBottom: "5px", color: "#888" }}><span>SUBTOTAL</span><span>${subtotal.toLocaleString()}</span></div>
-          {promoDiscount > 0 && <div style={{ display: "flex", justifyContent: "space-between", color: "#5c5" }}><span>DESCUENTO</span><span>-${promoDiscount.toLocaleString()}</span></div>}
-          <div style={{ display: "flex", justifyContent: "space-between", fontSize: "1.4rem", fontWeight: "bold", color: "#D4AF37", margin: "10px 0" }}><span>TOTAL</span><span>${total.toLocaleString()}</span></div>
+        <div style={{ padding: "20px", backgroundColor: "#0a0a0a", borderTop: "2px solid #D4AF37" }}>
+          <div style={{ display: "flex", justifyContent: "space-between", marginBottom: "5px", color: "#666", fontSize: '0.8rem' }}><span>SUBTOTAL</span><span>${subtotal.toLocaleString()}</span></div>
+          {promoDiscount > 0 && <div style={{ display: "flex", justifyContent: "space-between", color: "#5c5", fontSize: '0.8rem' }}><span>DESC. PROMO</span><span>-${promoDiscount.toLocaleString()}</span></div>}
+          <div style={{ display: "flex", justifyContent: "space-between", fontSize: "1.6rem", fontWeight: "bold", color: "#D4AF37", margin: "10px 0" }}><span>TOTAL</span><span>${total.toLocaleString()}</span></div>
 
           {!sale ? (
-            <button onClick={createSale} disabled={cart.length === 0} style={{ width: "100%", padding: "15px", background: "#D4AF37", border: "none", borderRadius: "10px", fontWeight: "bold", cursor: "pointer" }}>REGISTRAR VENTA</button>
+            <button onClick={createSale} disabled={cart.length === 0} style={{ width: "100%", padding: "18px", background: "#D4AF37", border: "none", borderRadius: "10px", fontWeight: "bold", cursor: "pointer", fontSize: '1rem' }}>REGISTRAR VENTA</button>
           ) : (
             <div>
-              <input type="number" placeholder="DINERO RECIBIDO" value={cashReceived} onChange={e => setCashReceived(e.target.value)} style={{ width: "100%", padding: "12px", background: "#000", border: "1px solid #D4AF37", color: "#fff", borderRadius: "8px", textAlign: "center", fontSize: "1.2rem", marginBottom: "10px" }} />
+              <input type="number" placeholder="EFECTIVO RECIBIDO" value={cashReceived} onChange={e => setCashReceived(e.target.value)} style={{ width: "100%", padding: "12px", background: "#000", border: "1px solid #D4AF37", color: "#fff", borderRadius: "8px", textAlign: "center", fontSize: "1.4rem", marginBottom: "15px", outline: 'none' }} />
               <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "10px" }}>
-                <button onClick={payCash} style={{ padding: "12px", background: "#D4AF37", color: "#000", border: "none", borderRadius: "8px", fontWeight: "bold" }}><FiDollarSign /> EFECTIVO</button>
-                <button onClick={() => setShowQRConfirm(true)} style={{ padding: "12px", border: "1px solid #5c5", color: "#5c5", background: "none", borderRadius: "8px", fontWeight: "bold" }}><FiCreditCard /> QR</button>
+                <button onClick={payCash} style={{ padding: "15px", background: "#D4AF37", color: "#000", border: "none", borderRadius: "8px", fontWeight: "bold", cursor: 'pointer' }}><FiDollarSign /> EFECTIVO</button>
+                <button onClick={() => setShowQRConfirm(true)} style={{ padding: "15px", border: "1px solid #5c5", color: "#5c5", background: "none", borderRadius: "8px", fontWeight: "bold", cursor: 'pointer' }}><FiCreditCard /> QR / NEQUI</button>
               </div>
-              <button onClick={() => setSale(null)} style={{ width: "100%", marginTop: "10px", color: "#666", fontSize: "0.8rem", background: "none", border: "none", cursor: "pointer" }}>Cancelar Pago</button>
+              <button onClick={() => setSale(null)} style={{ width: "100%", marginTop: "15px", color: "#666", fontSize: "0.8rem", background: "none", border: "none", cursor: "pointer", textDecoration: 'underline' }}>Cancelar Pago</button>
             </div>
           )}
-          <button onClick={clearCart} style={{ width: "100%", marginTop: "15px", color: "#f55", background: "none", border: "none", fontSize: "0.8rem", cursor: "pointer" }}>Limpiar Carrito</button>
+          <button onClick={clearCart} style={{ width: "100%", marginTop: "15px", color: "#f55", background: "none", border: "none", fontSize: "0.7rem", cursor: "pointer", opacity: 0.6 }}>Limpiar Carrito</button>
         </div>
       </div>
 
       {showQRConfirm && (
-        <div style={{ position: "fixed", inset: 0, background: "rgba(0,0,0,0.8)", display: "flex", alignItems: "center", justifyContent: "center", zIndex: 100 }}>
-          <div style={{ background: "#111", padding: "30px", borderRadius: "20px", border: "1px solid #D4AF37", textAlign: "center" }}>
-            <p style={{ color: "#fff", marginBottom: "20px" }}>¿Confirmas el pago por Transferencia/QR?</p>
-            <div style={{ display: "flex", gap: "10px" }}>
-              <button onClick={() => setShowQRConfirm(false)} style={{ flex: 1, padding: "10px", background: "#333", color: "#fff", border: "none", borderRadius: "8px" }}>NO</button>
-              <button onClick={confirmQRPayment} style={{ flex: 1, padding: "10px", background: "#D4AF37", border: "none", borderRadius: "8px", fontWeight: "bold" }}>SÍ, PAGADO</button>
+        <div style={{ position: "fixed", inset: 0, background: "rgba(0,0,0,0.9)", display: "flex", alignItems: "center", justifyContent: "center", zIndex: 1000, backdropFilter: 'blur(4px)' }}>
+          <div style={{ background: "#111", padding: "40px", borderRadius: "20px", border: "1px solid #D4AF37", textAlign: "center", maxWidth: '350px' }}>
+            <p style={{ color: "#fff", marginBottom: "30px", fontSize: '1.1rem' }}>¿El cliente ya realizó la transferencia?</p>
+            <div style={{ display: "flex", gap: "15px" }}>
+              <button onClick={() => setShowQRConfirm(false)} style={{ flex: 1, padding: "12px", background: "#222", color: "#888", border: "1px solid #333", borderRadius: "10px", cursor: 'pointer' }}>NO, VOLVER</button>
+              <button onClick={confirmQRPayment} style={{ flex: 1, padding: "12px", background: "#D4AF37", color: "#000", border: "none", borderRadius: "10px", fontWeight: "bold", cursor: 'pointer' }}>SÍ, PAGADO</button>
             </div>
           </div>
         </div>
