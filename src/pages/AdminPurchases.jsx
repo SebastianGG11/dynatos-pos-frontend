@@ -1,6 +1,6 @@
 import { useState, useEffect } from "react";
 import api from "../api/api";
-import { FiPlus, FiTruck, FiCalendar, FiDollarSign, FiTrash2, FiAlertCircle } from "react-icons/fi";
+import { FiPlus, FiTrash2, FiAlertCircle, FiFileText } from "react-icons/fi";
 
 export default function AdminPurchases() {
   const [purchases, setPurchases] = useState([]);
@@ -13,7 +13,7 @@ export default function AdminPurchases() {
     supplier_name: "",
     invoice_number: "",
     total_amount: "",
-    notes: ""
+    notes: "" // 👈 AQUÍ ESTÁ TU DESCRIPCIÓN
   });
 
   useEffect(() => {
@@ -23,12 +23,10 @@ export default function AdminPurchases() {
   const loadPurchases = async () => {
     setLoading(true);
     try {
-      // Intentamos cargar las compras del backend
       const res = await api.get("/purchases");
       setPurchases(res.data?.items ?? []);
     } catch (err) {
       console.error("Error cargando compras:", err);
-      // Si el backend aún no tiene la tabla compras, mostramos vacío
       setPurchases([]);
     } finally {
       setLoading(false);
@@ -43,11 +41,12 @@ export default function AdminPurchases() {
   const savePurchase = async () => {
     setUiError("");
     if (!form.supplier_name || !form.total_amount) {
-      return setUiError("Proveedor y Monto son obligatorios");
+      return setUiError("El Proveedor y el Monto son obligatorios");
     }
 
     setSaving(true);
     try {
+      // Enviamos TODO el formulario, incluyendo las notas
       await api.post("/purchases", {
         ...form,
         total_amount: Number(form.total_amount)
@@ -55,108 +54,122 @@ export default function AdminPurchases() {
       await loadPurchases();
       setShowForm(false);
       setForm({ supplier_name: "", invoice_number: "", total_amount: "", notes: "" });
+      alert("¡Compra registrada con éxito!");
     } catch (err) {
-      setUiError("Error al guardar. Verifica si la tabla de compras existe en tu DB.");
+      setUiError("Error al guardar: Verifica que el servidor tenga la ruta /purchases y la tabla en la DB.");
     } finally {
       setSaving(false);
     }
   };
 
   const deletePurchase = async (id) => {
-    if (!window.confirm("¿Eliminar este registro de compra?")) return;
+    if (!window.confirm("¿Seguro que quieres eliminar este registro de compra?")) return;
     try {
       await api.delete(`/purchases/${id}`);
       await loadPurchases();
     } catch (err) {
-      alert("Error al eliminar");
+      alert("No se pudo eliminar el registro.");
     }
   };
 
   const money = (n) => `$${Number(n).toLocaleString("es-CO")}`;
 
-  if (loading) return <div style={{ color: "#D4AF37", padding: "40px", textAlign: "center" }}>Cargando Compras...</div>;
+  if (loading) return <div style={{ color: "#D4AF37", padding: "40px", textAlign: "center" }}>Cargando sistema de compras...</div>;
 
   return (
-    <div style={{ maxWidth: "1200px", margin: "0 auto", animation: "fadeIn 0.5s ease" }}>
+    <div style={{ maxWidth: "1200px", margin: "0 auto" }}>
       
       {/* HEADER */}
       <div style={{
         display: "flex", justifyContent: "space-between", alignItems: "center",
         backgroundColor: "#111", padding: "30px", borderRadius: "15px",
-        border: "1px solid #D4AF37", marginBottom: "30px"
+        border: "1px solid #D4AF37", marginBottom: "30px", boxShadow: "0 10px 30px rgba(0,0,0,0.5)"
       }}>
         <div>
           <h1 style={{ color: "#D4AF37", margin: 0, fontSize: "2rem", letterSpacing: "3px", fontWeight: "bold" }}>COMPRAS</h1>
-          <p style={{ color: "#888", fontSize: "0.9rem" }}>Gestión de Facturas de Proveedores</p>
+          <p style={{ color: "#888", fontSize: "0.9rem" }}>Control de Mercancía y Proveedores</p>
         </div>
         <button onClick={() => setShowForm(true)} style={{
           backgroundColor: "#D4AF37", color: "#000", border: "none", padding: "14px 28px",
           borderRadius: "10px", fontWeight: "bold", cursor: "pointer", display: "flex", alignItems: "center", gap: "10px"
         }}>
-          <FiPlus size={20} /> REGISTRAR COMPRA
+          <FiPlus size={20} /> REGISTRAR ENTRADA
         </button>
       </div>
 
       {uiError && (
-        <div style={{ backgroundColor: "#300", color: "#f88", padding: "15px", borderRadius: "10px", border: "1px solid #f00", marginBottom: "20px" }}>
+        <div style={{ backgroundColor: "#300", color: "#f88", padding: "15px", borderRadius: "10px", border: "1px solid #f00", marginBottom: "20px", display: "flex", alignItems: "center", gap: "10px" }}>
           <FiAlertCircle /> {uiError}
         </div>
       )}
 
-      {/* MODAL FORM */}
+      {/* FORMULARIO MODAL */}
       {showForm && (
-        <div style={{ position: "fixed", inset: 0, backgroundColor: "rgba(0,0,0,0.9)", zIndex: 2000, display: "flex", alignItems: "center", justifyContent: "center", padding: "20px" }}>
+        <div style={{ position: "fixed", inset: 0, backgroundColor: "rgba(0,0,0,0.95)", zIndex: 2000, display: "flex", alignItems: "center", justifyContent: "center", padding: "20px" }}>
           <div style={{ backgroundColor: "#111", border: "1px solid #D4AF37", padding: "40px", borderRadius: "20px", width: "100%", maxWidth: "600px" }}>
-            <h3 style={{ color: "#D4AF37", marginBottom: "30px" }}>NUEVA COMPRA</h3>
+            <h3 style={{ color: "#D4AF37", marginTop: 0, marginBottom: "30px", fontSize: "1.5rem" }}>DATOS DE LA COMPRA</h3>
             
             <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "20px" }}>
               <div style={{ gridColumn: "span 2" }}>
-                <label style={{ color: "#D4AF37", fontSize: "0.8rem" }}>PROVEEDOR</label>
-                <input name="supplier_name" value={form.supplier_name} onChange={handleChange} style={{ width: "100%", padding: "12px", borderRadius: "8px", border: "1px solid #333", backgroundColor: "#000", color: "#fff" }} />
+                <label style={{ color: "#D4AF37", fontSize: "0.8rem", display: "block", marginBottom: "5px" }}>PROVEEDOR</label>
+                <input name="supplier_name" value={form.supplier_name} onChange={handleChange} placeholder="Ej: Distribuidora Central" style={{ width: "100%", padding: "12px", borderRadius: "8px", border: "1px solid #333", backgroundColor: "#000", color: "#fff" }} />
               </div>
               <div>
-                <label style={{ color: "#D4AF37", fontSize: "0.8rem" }}>N° FACTURA</label>
-                <input name="invoice_number" value={form.invoice_number} onChange={handleChange} style={{ width: "100%", padding: "12px", borderRadius: "8px", border: "1px solid #333", backgroundColor: "#000", color: "#fff" }} />
+                <label style={{ color: "#D4AF37", fontSize: "0.8rem", display: "block", marginBottom: "5px" }}>N° FACTURA</label>
+                <input name="invoice_number" value={form.invoice_number} onChange={handleChange} placeholder="Opcional" style={{ width: "100%", padding: "12px", borderRadius: "8px", border: "1px solid #333", backgroundColor: "#000", color: "#fff" }} />
               </div>
               <div>
-                <label style={{ color: "#D4AF37", fontSize: "0.8rem" }}>MONTO TOTAL</label>
-                <input name="total_amount" type="number" value={form.total_amount} onChange={handleChange} style={{ width: "100%", padding: "12px", borderRadius: "8px", border: "1px solid #333", backgroundColor: "#000", color: "#fff" }} />
+                <label style={{ color: "#D4AF37", fontSize: "0.8rem", display: "block", marginBottom: "5px" }}>MONTO TOTAL</label>
+                <input name="total_amount" type="number" value={form.total_amount} onChange={handleChange} placeholder="0" style={{ width: "100%", padding: "12px", borderRadius: "8px", border: "1px solid #333", backgroundColor: "#000", color: "#fff" }} />
+              </div>
+              
+              {/* CAMPO DE DESCRIPCIÓN (NOTAS) */}
+              <div style={{ gridColumn: "span 2" }}>
+                <label style={{ color: "#D4AF37", fontSize: "0.8rem", display: "block", marginBottom: "5px" }}>DETALLES DE LA COMPRA (DESCRIPCIÓN)</label>
+                <textarea 
+                  name="notes" 
+                  value={form.notes} 
+                  onChange={handleChange} 
+                  placeholder="Escribe aquí los productos comprados, cantidades o cualquier observación..."
+                  rows="4"
+                  style={{ width: "100%", padding: "12px", borderRadius: "8px", border: "1px solid #333", backgroundColor: "#000", color: "#fff", resize: "none", fontFamily: "inherit" }}
+                />
               </div>
             </div>
 
             <div style={{ display: "flex", gap: "15px", marginTop: "30px" }}>
-              <button onClick={() => setShowForm(false)} style={{ flex: 1, padding: "12px", border: "1px solid #333", backgroundColor: "transparent", color: "#888", cursor: "pointer" }}>CANCELAR</button>
-              <button onClick={savePurchase} disabled={saving} style={{ flex: 1, padding: "12px", border: "none", backgroundColor: "#D4AF37", color: "#000", fontWeight: "bold", cursor: "pointer" }}>
-                {saving ? "GUARDANDO..." : "GUARDAR COMPRA"}
+              <button onClick={() => setShowForm(false)} style={{ flex: 1, padding: "12px", borderRadius: "8px", border: "1px solid #333", backgroundColor: "transparent", color: "#888", cursor: "pointer" }}>CANCELAR</button>
+              <button onClick={savePurchase} disabled={saving} style={{ flex: 1, padding: "12px", borderRadius: "8px", border: "none", backgroundColor: "#D4AF37", color: "#000", fontWeight: "bold", cursor: "pointer" }}>
+                {saving ? "PROCESANDO..." : "REGISTRAR COMPRA"}
               </button>
             </div>
           </div>
         </div>
       )}
 
-      {/* TABLA */}
+      {/* LISTADO */}
       <div style={{ backgroundColor: "#111", borderRadius: "15px", border: "1px solid #222", overflow: "hidden" }}>
         <table style={{ width: "100%", borderCollapse: "collapse", color: "#eee" }}>
           <thead>
             <tr style={{ backgroundColor: "#1a1a1a", color: "#D4AF37", textAlign: "left" }}>
               <th style={{ padding: "20px" }}>FECHA</th>
               <th style={{ padding: "20px" }}>PROVEEDOR</th>
-              <th style={{ padding: "20px" }}>FACTURA</th>
+              <th style={{ padding: "20px" }}>DETALLES</th>
               <th style={{ padding: "20px", textAlign: "right" }}>TOTAL</th>
               <th style={{ padding: "20px", textAlign: "center" }}>ACCIONES</th>
             </tr>
           </thead>
           <tbody>
             {purchases.length === 0 ? (
-              <tr>
-                <td colSpan="5" style={{ padding: "40px", textAlign: "center", color: "#555" }}>No hay compras registradas aún.</td>
-              </tr>
+              <tr><td colSpan="5" style={{ padding: "40px", textAlign: "center", color: "#555" }}>No hay registros de compras.</td></tr>
             ) : (
               purchases.map(p => (
                 <tr key={p.id} style={{ borderBottom: "1px solid #222" }}>
                   <td style={{ padding: "20px" }}>{new Date(p.created_at).toLocaleDateString()}</td>
                   <td style={{ padding: "20px", fontWeight: "bold" }}>{p.supplier_name}</td>
-                  <td style={{ padding: "20px", color: "#888" }}>{p.invoice_number || "S/N"}</td>
+                  <td style={{ padding: "20px", color: "#888", fontSize: "0.85rem" }}>
+                    {p.notes || "Sin descripción"}
+                  </td>
                   <td style={{ padding: "20px", textAlign: "right", color: "#D4AF37", fontWeight: "bold" }}>{money(p.total_amount)}</td>
                   <td style={{ padding: "20px", textAlign: "center" }}>
                     <button onClick={() => deletePurchase(p.id)} style={{ background: "none", border: "none", color: "#f55", cursor: "pointer" }}>
