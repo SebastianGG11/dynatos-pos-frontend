@@ -1,4 +1,4 @@
-import { useEffect, useState, useMemo } from "react";
+import { useEffect, useMemo, useState } from "react";
 import api from "../api/api";
 import CerrarCaja from "./CerrarCaja";
 import { FiShoppingCart, FiTrash2, FiPlus, FiMinus, FiCreditCard, FiDollarSign, FiUser } from "react-icons/fi";
@@ -14,49 +14,47 @@ export default function Venta({ cashDrawer, onCashClosed }) {
   const [cashReceived, setCashReceived] = useState("");
   const [showQRConfirm, setShowQRConfirm] = useState(false);
   const [showCloseCash, setShowCloseCash] = useState(false);
-  
-  // ---------------------------------------------------------
-  // 🕵️‍♂️ LÓGICA DE DETECTIVE PARA ENCONTRAR EL NOMBRE
-  // ---------------------------------------------------------
-  const [nombreCajero, setNombreCajero] = useState("Cajero...");
 
-  useEffect(() => {
-    const encontrarNombre = () => {
-      // 1. Si viene de la base de datos, es la mejor opción
-      if (cashDrawer?.user_full_name) return cashDrawer.user_full_name;
-
-      // 2. Escaneo profundo del LocalStorage (Fuerza Bruta)
+  // ------------------------------------------------------------------
+  // 🕵️‍♂️ LÓGICA DE EXTRACCIÓN DE NOMBRE (CORREGIDA)
+  // ------------------------------------------------------------------
+  const nombreCajero = useMemo(() => {
+    // Función auxiliar para intentar leer JSON
+    const intentarParsear = (texto) => {
+      if (!texto || typeof texto !== 'string') return null;
       try {
-        // Recorremos TODAS las llaves guardadas en el navegador
-        for (let i = 0; i < localStorage.length; i++) {
-          const key = localStorage.key(i);
-          const val = localStorage.getItem(key);
-
-          // Si parece un JSON (empieza con {), intentamos leerlo
-          if (val && val.startsWith("{")) {
-            try {
-              const parsed = JSON.parse(val);
-              // Buscamos cualquier propiedad que parezca un nombre
-              if (parsed.FULL_NAME) return parsed.FULL_NAME;
-              if (parsed.user_full_name) return parsed.user_full_name;
-              if (parsed.nombre) return parsed.nombre;
-              if (parsed.name) return parsed.name;
-              if (parsed.USERNAME) return parsed.USERNAME;
-            } catch (e) {
-              continue; // No era un JSON válido, seguimos buscando
-            }
-          }
+        // Si el texto empieza con {, intentamos convertirlo a Objeto
+        if (texto.trim().startsWith('{')) {
+          const obj = JSON.parse(texto);
+          // Buscamos las propiedades exactas que me mostraste
+          return obj.FULL_NAME || obj.USERNAME || obj.user_full_name || obj.name;
         }
+        // Si no es JSON, devolvemos el texto tal cual (ej: "Jhonier")
+        return texto;
       } catch (e) {
-        console.error("Error escaneando nombres", e);
+        return texto; 
       }
-
-      return "Cajero General";
     };
 
-    setNombreCajero(encontrarNombre());
+    // 1. Revisamos si viene directo del Backend en cashDrawer
+    let nombre = intentarParsear(cashDrawer?.user_full_name);
+    if (nombre && nombre !== "null") return nombre;
+
+    // 2. Revisamos LocalStorage (buscando claves comunes)
+    const claves = ['user', 'user_data', 'usuario', 'data', 'auth'];
+    for (const k of claves) {
+      const valorStorage = localStorage.getItem(k);
+      nombre = intentarParsear(valorStorage);
+      if (nombre) return nombre;
+    }
+
+    // 3. Último recurso: Buscar cualquier string que parezca un nombre en localStorage
+    if (localStorage.getItem('user_name')) return localStorage.getItem('user_name');
+    if (localStorage.getItem('full_name')) return localStorage.getItem('full_name');
+
+    return "Cajero General";
   }, [cashDrawer]);
-  // ---------------------------------------------------------
+  // ------------------------------------------------------------------
 
   useEffect(() => { loadAll(); }, []);
 
@@ -65,7 +63,7 @@ export default function Venta({ cashDrawer, onCashClosed }) {
       const [catRes, prodRes] = await Promise.all([api.get("/categories"), api.get("/products")]);
       setCategories(catRes.data?.items ?? []);
       setProducts(prodRes.data?.items ?? []);
-    } catch { console.error("Error en la carga de datos"); }
+    } catch { console.error("Error en datos"); }
   };
 
   const filteredProducts = selectedCategory === "ALL" ? products : products.filter(p => p.category_id === selectedCategory);
@@ -135,15 +133,15 @@ export default function Venta({ cashDrawer, onCashClosed }) {
   const confirmQRPayment = async () => {
     try {
       await api.post("/payments/qr", { sale_id: sale.id, amount: total, provider: "NEQUI" });
-      setShowQRConfirm(false); 
-      setTimeout(finishSale, 300); 
+      setShowQRConfirm(false);
+      setTimeout(finishSale, 300);
     } catch { alert("Error en QR"); }
   };
 
   return (
     <div style={{ display: "flex", height: "100vh", backgroundColor: "#000", overflow: "hidden" }}>
       
-      {/* 🧾 TIRILLA TÉRMICA */}
+      {/* 🧾 TIRILLA TÉRMICA (PRINT ONLY) */}
       <div id="print-area" style={{ display: "none" }}>
         <div style={{ width: "80mm", padding: "5mm", color: "#000", fontFamily: 'monospace', backgroundColor: '#fff' }}>
           <center>
@@ -151,15 +149,20 @@ export default function Venta({ cashDrawer, onCashClosed }) {
             <p style={{ margin: 0, fontSize: '11px' }}>MARKET & LICORERÍA</p>
           </center>
           <div style={{ marginTop: '10px', fontSize: '10px' }}>
-            <p style={{ margin: 0 }}>FECHA: {new Date().toLocaleDateString()} {new Date().toLocaleTimeString()}</p>
-            <p style={{ margin: 0 }}>CAJERO: {nombreCajero}</p>
+            <p style={{ margin: 0 }}>FECHA: {new Date().toLocaleString()}</p>
+            <p style={{ margin: 0 }}>CAJERO: {String(nombreCajero).toUpperCase()}</p>
             <p style={{ margin: 0 }}>ORDEN: #{sale?.id || '000'}</p>
           </div>
           <hr style={{ border: '0.5px dashed #000', margin: '8px 0' }} />
           <table style={{ width: '100%', fontSize: '10px' }}>
-            {cart.map(i => (
-              <tr key={i.id}><td>{i.qty} x {i.name.substring(0,18)}</td><td align="right">${(i.qty * i.sale_price).toLocaleString()}</td></tr>
-            ))}
+            <tbody>
+              {cart.map(i => (
+                <tr key={i.id}>
+                  <td>{i.qty} x {i.name.substring(0,18)}</td>
+                  <td align="right">${(i.qty * i.sale_price).toLocaleString()}</td>
+                </tr>
+              ))}
+            </tbody>
           </table>
           <hr style={{ border: '0.5px dashed #000', margin: '8px 0' }} />
           <div style={{ textAlign: 'right', fontSize: '10px' }}>
@@ -173,7 +176,7 @@ export default function Venta({ cashDrawer, onCashClosed }) {
 
       <style>{`@media print { body * { visibility: hidden; } #print-area, #print-area * { visibility: visible; } #print-area { position: absolute; left: 0; top: 0; width: 100%; display: block !important; } }`}</style>
 
-      {/* 1. SIDEBAR */}
+      {/* 1. SIDEBAR CATEGORÍAS */}
       <div style={{ width: "200px", borderRight: "1px solid #D4AF37", padding: "20px", display: "flex", flexDirection: "column" }}>
         <h3 style={{ color: "#D4AF37", fontSize: "0.7rem", marginBottom: "20px", letterSpacing: '1px' }}>CATEGORÍAS</h3>
         <div style={{ flex: 1, overflowY: "auto" }}>
@@ -183,7 +186,7 @@ export default function Venta({ cashDrawer, onCashClosed }) {
         <button onClick={() => setShowCloseCash(true)} style={{ padding: "12px", background: "#f44", color: "#fff", border: "none", borderRadius: "8px", fontWeight: "bold", cursor: 'pointer' }}>CERRAR CAJA</button>
       </div>
 
-      {/* 2. PRODUCTOS */}
+      {/* 2. GRILLA PRODUCTOS */}
       <div style={{ flex: 1, padding: "30px", overflowY: "auto" }}>
         <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '30px' }}>
           <h1 style={{ color: "#D4AF37", fontFamily: "serif", margin: 0 }}>PRODUCTOS</h1>
@@ -243,7 +246,7 @@ export default function Venta({ cashDrawer, onCashClosed }) {
       {showQRConfirm && (
         <div style={{ position: "fixed", inset: 0, background: "rgba(0,0,0,0.9)", display: "flex", alignItems: "center", justifyContent: "center", zIndex: 1000 }}>
           <div style={{ background: "#111", padding: "40px", borderRadius: "20px", border: "1px solid #D4AF37", textAlign: "center", maxWidth: '350px' }}>
-            <p style={{ color: "#fff", marginBottom: "30px" }}>¿Confirmas que el cliente ya transfirió?</p>
+            <p style={{ color: "#fff", marginBottom: "30px" }}>¿Confirmas el pago?</p>
             <div style={{ display: "flex", gap: "15px" }}>
               <button onClick={() => setShowQRConfirm(false)} style={{ flex: 1, padding: "12px", background: "#222", color: "#888", border: "none", borderRadius: '8px', cursor: 'pointer' }}>NO, VOLVER</button>
               <button onClick={confirmQRPayment} style={{ flex: 1, padding: "12px", background: "#D4AF37", color: "#000", border: "none", borderRadius: '8px', fontWeight: "bold", cursor: 'pointer' }}>SÍ, PAGADO</button>
