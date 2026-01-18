@@ -26,7 +26,7 @@ export default function AbrirCaja({ onOpened }) {
       setLoading(false);
     }
   };
-
+//si
   return (
     <div className="bg-white p-6 rounded w-96 shadow">
       <h2 className="text-xl font-semibold mb-4">
