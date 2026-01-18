@@ -15,21 +15,18 @@ export default function Venta({ cashDrawer, onCashClosed }) {
   const [showCloseCash, setShowCloseCash] = useState(false);
   const [receiptData, setReceiptData] = useState(null);
 
-  // --- LÓGICA DE NOMBRE (FUERZA BRUTA) ---
+  // --- LÓGICA DE NOMBRE (REGEX) ---
   const nombreCajero = useMemo(() => {
     let raw = cashDrawer?.user_full_name || localStorage.getItem('user') || localStorage.getItem('user_data') || "";
     let str = typeof raw === 'object' ? JSON.stringify(raw) : String(raw);
     
-    // 1. Regex para JSON
     const matchFull = str.match(/"FULL_NAME":"([^"]+)"/);
     if (matchFull) return matchFull[1];
     
     const matchUser = str.match(/"USERNAME":"([^"]+)"/);
     if (matchUser) return matchUser[1];
 
-    // 2. Si es texto limpio
     if (!str.includes("{") && str.length < 25) return str;
-    
     return "Cajero General";
   }, [cashDrawer]);
 
@@ -75,9 +72,9 @@ export default function Venta({ cashDrawer, onCashClosed }) {
   }, [cart, cashDrawer?.id]);
 
   const total = preview?.total ?? cart.reduce((s, i) => s + (Number(i.sale_price) * i.qty), 0);
-  // NOTA: Mantenemos el cálculo del 19% pero cambiamos la etiqueta visual a IC
-  const tasaImpuesto = 0.19; 
-  const valorImpuesto = total - (total / (1 + tasaImpuesto));
+  
+  // CÁLCULO DE IMPUESTO AL CONSUMO (IC)
+  const valorImpuesto = total - (total / 1.19); // Asumiendo que sigue siendo 19% matemático
   const baseGravable = total - valorImpuesto;
 
   const finalizeTransaction = (method, received, change) => {
@@ -87,7 +84,7 @@ export default function Venta({ cashDrawer, onCashClosed }) {
       cajero: nombreCajero,
       items: [...cart],
       subtotal: baseGravable,
-      iva: valorImpuesto,
+      impuesto: valorImpuesto, // Variable renombrada
       total: total,
       method: method,
       received: received,
@@ -125,7 +122,7 @@ export default function Venta({ cashDrawer, onCashClosed }) {
   return (
     <div style={{ display: "flex", height: "100vh", backgroundColor: "#000", overflow: "hidden" }}>
       
-      {/* 🧾 TIRILLA TÉRMICA (SOLO VISIBLE AL IMPRIMIR) */}
+      {/* 🧾 TIRILLA TÉRMICA - ZONA DE IMPRESIÓN */}
       <div id="print-area" style={{ display: "none" }}>
         {receiptData && (
           <div style={{ width: "80mm", padding: "5mm", color: "#000", fontFamily: 'monospace', backgroundColor: '#fff', fontSize: '11px' }}>
@@ -154,12 +151,13 @@ export default function Venta({ cashDrawer, onCashClosed }) {
             
             <div style={{ textAlign: 'right' }}>
               <p style={{ margin: 0 }}>SUBTOTAL: ${receiptData.subtotal.toLocaleString(undefined, {maximumFractionDigits:0})}</p>
-              {/* ✅ CAMBIO SOLICITADO POR CLIENTE: IC EN VEZ DE IVA */}
-              <p style={{ margin: 0 }}>IC / IMPOCONSUMO: ${receiptData.iva.toLocaleString(undefined, {maximumFractionDigits:0})}</p>
+              
+              {/* 🔥 AQUÍ ESTÁ EL TEXTO QUE DEBE SALIR EN LA FACTURA 🔥 */}
+              <p style={{ margin: 0 }}>IC / IMPOCONSUMO: ${receiptData.impuesto.toLocaleString(undefined, {maximumFractionDigits:0})}</p>
+              
               <h2 style={{ margin: '5px 0', fontSize: '16px' }}>TOTAL: ${receiptData.total.toLocaleString()}</h2>
             </div>
             
-            {/* RESUMEN DE PAGO */}
             <div style={{ borderTop: '1px solid #000', marginTop: '10px', paddingTop: '5px' }}>
               <p style={{ margin: 0, fontWeight: 'bold' }}>MÉTODO: {receiptData.method}</p>
               <div style={{ display: 'flex', justifyContent: 'space-between' }}>
@@ -176,7 +174,7 @@ export default function Venta({ cashDrawer, onCashClosed }) {
 
       <style>{`@media print { body * { visibility: hidden; } #print-area, #print-area * { visibility: visible; } #print-area { position: absolute; left: 0; top: 0; width: 100%; display: block !important; } }`}</style>
 
-      {/* 1. SIDEBAR */}
+      {/* 1. SIDEBAR IZQUIERDO */}
       <div style={{ width: "200px", borderRight: "1px solid #D4AF37", padding: "20px", display: "flex", flexDirection: "column" }}>
         <h3 style={{ color: "#D4AF37", fontSize: "0.7rem", marginBottom: "20px" }}>CATEGORÍAS</h3>
         <div style={{ flex: 1, overflowY: "auto" }}>
@@ -186,7 +184,7 @@ export default function Venta({ cashDrawer, onCashClosed }) {
         <button onClick={() => setShowCloseCash(true)} style={{ padding: "12px", background: "#f44", color: "#fff", border: "none", borderRadius: "8px", fontWeight: "bold", cursor: 'pointer' }}>CERRAR CAJA</button>
       </div>
 
-      {/* 2. PRODUCTOS */}
+      {/* 2. ZONA DE PRODUCTOS */}
       <div style={{ flex: 1, padding: "30px", overflowY: "auto" }}>
         <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '30px' }}>
           <h1 style={{ color: "#D4AF37", fontFamily: "serif", margin: 0 }}>PRODUCTOS</h1>
@@ -205,7 +203,7 @@ export default function Venta({ cashDrawer, onCashClosed }) {
         </div>
       </div>
 
-      {/* 3. CARRITO */}
+      {/* 3. CARRITO LATERAL */}
       <div style={{ width: "380px", borderLeft: "1px solid #222", display: "flex", flexDirection: "column", backgroundColor: "#111" }}>
         <div style={{ padding: "20px", borderBottom: "1px solid #222", color: "#D4AF37", fontWeight: "bold" }}><FiShoppingCart /> COMPRA ACTUAL</div>
         <div style={{ flex: 1, overflowY: "auto", padding: "20px" }}>
@@ -223,8 +221,10 @@ export default function Venta({ cashDrawer, onCashClosed }) {
         </div>
         <div style={{ padding: "20px", backgroundColor: "#0a0a0a", borderTop: "2px solid #D4AF37" }}>
           <div style={{ display: "flex", justifyContent: "space-between", color: "#666", fontSize: '0.8rem' }}><span>BASE GRAVABLE</span><span>${baseGravable.toLocaleString(undefined, {maximumFractionDigits: 0})}</span></div>
-          {/* ✅ CAMBIO VISUAL AQUÍ TAMBIÉN */}
+          
+          {/* 🔥 AQUÍ TAMBIÉN ESTÁ EL CAMBIO PARA QUE SE VEA EN PANTALLA 🔥 */}
           <div style={{ display: "flex", justifyContent: "space-between", color: "#666", fontSize: '0.8rem', marginBottom: '10px' }}><span>IC / IMPOCONSUMO</span><span>${valorImpuesto.toLocaleString(undefined, {maximumFractionDigits: 0})}</span></div>
+          
           <div style={{ display: "flex", justifyContent: "space-between", fontSize: "1.8rem", fontWeight: "bold", color: "#D4AF37" }}><span>TOTAL</span><span>${total.toLocaleString()}</span></div>
           {!sale ? (
             <button onClick={createSale} disabled={cart.length === 0} style={{ width: "100%", padding: "18px", background: "#D4AF37", border: "none", borderRadius: "10px", fontWeight: "bold", marginTop: '15px', cursor: 'pointer' }}>PAGAR AHORA</button>
@@ -240,6 +240,7 @@ export default function Venta({ cashDrawer, onCashClosed }) {
           )}
         </div>
       </div>
+
       {showQRConfirm && (
         <div style={{ position: "fixed", inset: 0, background: "rgba(0,0,0,0.9)", display: "flex", alignItems: "center", justifyContent: "center", zIndex: 1000 }}>
           <div style={{ background: "#111", padding: "40px", borderRadius: "20px", border: "1px solid #D4AF37", textAlign: "center", maxWidth: '350px' }}>
