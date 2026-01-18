@@ -1,99 +1,164 @@
-import { useState } from "react";
-import { useNavigate } from "react-router-dom"; // Usamos esto para navegar sin recargar
-import api from "../api/api";
+import React, { useState } from 'react';
+import axios from 'axios';
+import { useNavigate } from 'react-router-dom';
 
-export default function Login() {
-  const [username, setUsername] = useState("");
-  const [password, setPassword] = useState("");
+const Login = () => {
+  const [username, setUsername] = useState('');
+  const [password, setPassword] = useState('');
   const [loading, setLoading] = useState(false);
-  const [error, setError] = useState("");
-  
-  const navigate = useNavigate(); // Hook de navegación
+  const navigate = useNavigate();
 
-  const onSubmit = async (e) => {
+  const handleLogin = async (e) => {
     e.preventDefault();
-    setError("");
     setLoading(true);
-
     try {
-      // 1. Petición al backend
-      const res = await api.post("/auth/login", {
-        username,
-        password,
+      // Petición al backend de Dynatos
+      const res = await axios.post('https://dynatos-pos-backend-1.onrender.com/auth/login', { 
+        username, 
+        password 
       });
-
-      const { token, user } = res.data;
-
-      // 2. Verificación básica
-      if (!token || !user) {
-        throw new Error("Credenciales incorrectas o error en servidor");
-      }
-
-      // 3. Guardar en navegador
-      localStorage.setItem("token", token);
-      localStorage.setItem("user", JSON.stringify(user));
-
-      // 4. Redirección Inteligente
-      const role = user.role?.toUpperCase(); // Aseguramos mayúsculas
       
-      if (role === "ADMIN") {
-        navigate("/admin", { replace: true });
-      } else if (role === "CAJERO" || role === "CASHIER") {
-        navigate("/pos", { replace: true });
-      } else {
-        setError("Tu usuario no tiene un rol asignado válido.");
-      }
-
+      // Guardado de sesión
+      localStorage.setItem('token', res.data.token);
+      localStorage.setItem('user', JSON.stringify(res.data.user));
+      
+      // Redirección al home dinámico
+      navigate('/');
     } catch (err) {
-      console.error("Error Login:", err);
-      setError(
-        err?.response?.data?.message || 
-        "Error al iniciar sesión. Verifica tus datos."
-      );
+      console.error(err);
+      alert('Error: Usuario o contraseña incorrectos');
     } finally {
       setLoading(false);
     }
   };
 
   return (
-    <div className="min-h-screen bg-gray-100 flex items-center justify-center p-4">
-      <form className="bg-white w-full max-w-md p-8 rounded-xl shadow-lg" onSubmit={onSubmit}>
-        <h1 className="text-3xl font-bold text-center mb-6 text-gray-800">Dynatos POS</h1>
-
-        <div className="mb-4">
-          <label className="block text-gray-700 font-medium mb-1">Usuario</label>
-          <input
-            className="w-full border border-gray-300 rounded-lg px-4 py-2 focus:outline-none focus:ring-2 focus:ring-blue-500"
-            value={username}
-            onChange={(e) => setUsername(e.target.value)}
-            placeholder="Ingresa tu usuario"
-          />
+    <div style={{
+      height: '100vh',
+      width: '100vw',
+      display: 'flex',
+      alignItems: 'center',
+      justifyContent: 'center',
+      backgroundColor: '#050505', // Negro base
+      backgroundImage: 'radial-gradient(circle at center, #1a1a1a 0%, #050505 100%)',
+      margin: 0,
+      padding: 0,
+      overflow: 'hidden',
+      fontFamily: "'Segoe UI', Tahoma, Geneva, Verdana, sans-serif"
+    }}>
+      <div style={{
+        width: '100%',
+        maxWidth: '420px',
+        padding: '50px 40px',
+        backgroundColor: '#111',
+        borderRadius: '20px',
+        border: '1px solid #D4AF37', // Borde Dorado
+        boxShadow: '0 20px 50px rgba(0,0,0,0.8)',
+        textAlign: 'center'
+      }}>
+        {/* Encabezado Premium */}
+        <div style={{ marginBottom: '40px' }}>
+          <h1 style={{ 
+            color: '#D4AF37', 
+            fontSize: '2.5rem', 
+            letterSpacing: '4px', 
+            margin: '0',
+            fontWeight: 'bold',
+            textTransform: 'uppercase'
+          }}>
+            Dynatos
+          </h1>
+          <p style={{ 
+            color: '#888', 
+            fontSize: '0.8rem', 
+            letterSpacing: '3px', 
+            marginTop: '5px',
+            textTransform: 'uppercase'
+          }}>
+            Market & Licorería Premium
+          </p>
         </div>
 
-        <div className="mb-6">
-          <label className="block text-gray-700 font-medium mb-1">Contraseña</label>
-          <input
-            type="password"
-            className="w-full border border-gray-300 rounded-lg px-4 py-2 focus:outline-none focus:ring-2 focus:ring-blue-500"
-            value={password}
-            onChange={(e) => setPassword(e.target.value)}
-            placeholder="••••••••"
-          />
-        </div>
-
-        {error && (
-          <div className="bg-red-100 border-l-4 border-red-500 text-red-700 p-3 mb-4 text-sm">
-            {error}
+        {/* Formulario */}
+        <form onSubmit={handleLogin} style={{ display: 'flex', flexDirection: 'column', gap: '20px' }}>
+          <div style={{ textAlign: 'left' }}>
+            <label style={{ color: '#D4AF37', fontSize: '0.8rem', marginLeft: '5px', marginBottom: '5px', display: 'block' }}>
+              USUARIO
+            </label>
+            <input 
+              type="text" 
+              placeholder="Ingrese su usuario" 
+              value={username} 
+              onChange={(e) => setUsername(e.target.value)}
+              required
+              style={{ 
+                width: '100%',
+                padding: '15px', 
+                borderRadius: '10px', 
+                border: '1px solid #333', 
+                backgroundColor: '#1a1a1a', 
+                color: '#fff', 
+                outline: 'none',
+                boxSizing: 'border-box',
+                fontSize: '1rem'
+              }}
+            />
           </div>
-        )}
 
-        <button
-          className="w-full bg-black text-white py-3 rounded-lg font-semibold hover:bg-gray-800 transition disabled:opacity-50"
-          disabled={loading}
-        >
-          {loading ? "Verificando..." : "Iniciar Sesión"}
-        </button>
-      </form>
+          <div style={{ textAlign: 'left' }}>
+            <label style={{ color: '#D4AF37', fontSize: '0.8rem', marginLeft: '5px', marginBottom: '5px', display: 'block' }}>
+              CONTRASEÑA
+            </label>
+            <input 
+              type="password" 
+              placeholder="••••••••" 
+              value={password} 
+              onChange={(e) => setPassword(e.target.value)}
+              required
+              style={{ 
+                width: '100%',
+                padding: '15px', 
+                borderRadius: '10px', 
+                border: '1px solid #333', 
+                backgroundColor: '#1a1a1a', 
+                color: '#fff', 
+                outline: 'none',
+                boxSizing: 'border-box',
+                fontSize: '1rem'
+              }}
+            />
+          </div>
+
+          <button 
+            type="submit" 
+            disabled={loading}
+            style={{
+              padding: '16px', 
+              borderRadius: '10px', 
+              border: 'none', 
+              backgroundColor: loading ? '#555' : '#D4AF37', 
+              color: '#000',
+              fontWeight: 'bold', 
+              fontSize: '1rem', 
+              cursor: loading ? 'not-allowed' : 'pointer', 
+              transition: 'all 0.3s ease',
+              marginTop: '15px',
+              textTransform: 'uppercase',
+              letterSpacing: '1px'
+            }}
+            onMouseOver={(e) => { if(!loading) e.currentTarget.style.backgroundColor = '#f1c40f' }}
+            onMouseOut={(e) => { if(!loading) e.currentTarget.style.backgroundColor = '#D4AF37' }}
+          >
+            {loading ? 'Verificando...' : 'Entrar al Sistema'}
+          </button>
+        </form>
+
+        <footer style={{ marginTop: '30px', color: '#444', fontSize: '0.7rem' }}>
+          &copy; 2026 Dynatos POS System - Acceso Restringido
+        </footer>
+      </div>
     </div>
   );
-}
+};
+
+export default Login;
