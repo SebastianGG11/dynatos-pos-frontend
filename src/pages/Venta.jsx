@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useState, useMemo } from "react";
 import api from "../api/api";
 import CerrarCaja from "./CerrarCaja";
 import { FiShoppingCart, FiTrash2, FiPlus, FiMinus, FiCreditCard, FiDollarSign, FiUser } from "react-icons/fi";
@@ -14,33 +14,49 @@ export default function Venta({ cashDrawer, onCashClosed }) {
   const [cashReceived, setCashReceived] = useState("");
   const [showQRConfirm, setShowQRConfirm] = useState(false);
   const [showCloseCash, setShowCloseCash] = useState(false);
+  
+  // ---------------------------------------------------------
+  // 🕵️‍♂️ LÓGICA DE DETECTIVE PARA ENCONTRAR EL NOMBRE
+  // ---------------------------------------------------------
+  const [nombreCajero, setNombreCajero] = useState("Cajero...");
 
-  // ✅ Nombre dinámico del cajero
-  // Lógica para extraer el nombre real sin el formato de código
-// Lógica BLINDADA para obtener el nombre
-  const nombreCajero = useMemo(() => {
-    try {
-      // 1. Buscamos la data cruda en el localStorage (puede llamarse 'user', 'user_data', etc.)
-      const rawData = localStorage.getItem('user') || localStorage.getItem('user_data');
-      
-      if (rawData) {
-        // Intentamos convertir ese texto {"ID":...} en un objeto real
-        const parsed = JSON.parse(rawData);
-        // Si tiene FULL_NAME (como en tu ejemplo), lo usamos
-        if (parsed.FULL_NAME) return parsed.FULL_NAME;
-        if (parsed.user_name) return parsed.user_name;
-        if (parsed.name) return parsed.name;
-      }
-      
-      // 2. Si no estaba en el storage, miramos si viene en la caja
+  useEffect(() => {
+    const encontrarNombre = () => {
+      // 1. Si viene de la base de datos, es la mejor opción
       if (cashDrawer?.user_full_name) return cashDrawer.user_full_name;
 
-    } catch (e) {
-      console.error("Error leyendo nombre:", e);
-    }
+      // 2. Escaneo profundo del LocalStorage (Fuerza Bruta)
+      try {
+        // Recorremos TODAS las llaves guardadas en el navegador
+        for (let i = 0; i < localStorage.length; i++) {
+          const key = localStorage.key(i);
+          const val = localStorage.getItem(key);
 
-    return "Cajero (Sin Nombre)";
+          // Si parece un JSON (empieza con {), intentamos leerlo
+          if (val && val.startsWith("{")) {
+            try {
+              const parsed = JSON.parse(val);
+              // Buscamos cualquier propiedad que parezca un nombre
+              if (parsed.FULL_NAME) return parsed.FULL_NAME;
+              if (parsed.user_full_name) return parsed.user_full_name;
+              if (parsed.nombre) return parsed.nombre;
+              if (parsed.name) return parsed.name;
+              if (parsed.USERNAME) return parsed.USERNAME;
+            } catch (e) {
+              continue; // No era un JSON válido, seguimos buscando
+            }
+          }
+        }
+      } catch (e) {
+        console.error("Error escaneando nombres", e);
+      }
+
+      return "Cajero General";
+    };
+
+    setNombreCajero(encontrarNombre());
   }, [cashDrawer]);
+  // ---------------------------------------------------------
 
   useEffect(() => { loadAll(); }, []);
 
@@ -89,7 +105,6 @@ export default function Venta({ cashDrawer, onCashClosed }) {
     fetchPreview();
   }, [cart, cashDrawer?.id]);
 
-  // Cálculos de IVA y Totales
   const total = preview?.total ?? cart.reduce((s, i) => s + (Number(i.sale_price) * i.qty), 0);
   const tasaIva = 0.19;
   const valorIva = total - (total / (1 + tasaIva));
@@ -120,15 +135,15 @@ export default function Venta({ cashDrawer, onCashClosed }) {
   const confirmQRPayment = async () => {
     try {
       await api.post("/payments/qr", { sale_id: sale.id, amount: total, provider: "NEQUI" });
-      setShowQRConfirm(false); // ✅ Primero cerramos modal
-      setTimeout(finishSale, 300); // ✅ Luego imprimimos
+      setShowQRConfirm(false); 
+      setTimeout(finishSale, 300); 
     } catch { alert("Error en QR"); }
   };
 
   return (
     <div style={{ display: "flex", height: "100vh", backgroundColor: "#000", overflow: "hidden" }}>
       
-      {/* 🧾 TIRILLA TÉRMICA (SOLO IMPRESIÓN) */}
+      {/* 🧾 TIRILLA TÉRMICA */}
       <div id="print-area" style={{ display: "none" }}>
         <div style={{ width: "80mm", padding: "5mm", color: "#000", fontFamily: 'monospace', backgroundColor: '#fff' }}>
           <center>
@@ -158,7 +173,7 @@ export default function Venta({ cashDrawer, onCashClosed }) {
 
       <style>{`@media print { body * { visibility: hidden; } #print-area, #print-area * { visibility: visible; } #print-area { position: absolute; left: 0; top: 0; width: 100%; display: block !important; } }`}</style>
 
-      {/* 1. CATEGORÍAS */}
+      {/* 1. SIDEBAR */}
       <div style={{ width: "200px", borderRight: "1px solid #D4AF37", padding: "20px", display: "flex", flexDirection: "column" }}>
         <h3 style={{ color: "#D4AF37", fontSize: "0.7rem", marginBottom: "20px", letterSpacing: '1px' }}>CATEGORÍAS</h3>
         <div style={{ flex: 1, overflowY: "auto" }}>
@@ -168,12 +183,12 @@ export default function Venta({ cashDrawer, onCashClosed }) {
         <button onClick={() => setShowCloseCash(true)} style={{ padding: "12px", background: "#f44", color: "#fff", border: "none", borderRadius: "8px", fontWeight: "bold", cursor: 'pointer' }}>CERRAR CAJA</button>
       </div>
 
-      {/* 2. GRILLA PRODUCTOS (CON SCROLL) */}
+      {/* 2. PRODUCTOS */}
       <div style={{ flex: 1, padding: "30px", overflowY: "auto" }}>
         <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '30px' }}>
           <h1 style={{ color: "#D4AF37", fontFamily: "serif", margin: 0 }}>PRODUCTOS</h1>
           <div style={{ color: '#fff', fontSize: '0.8rem', backgroundColor: '#111', padding: '10px 15px', borderRadius: '8px', border: '1px solid #333', display: 'flex', alignItems: 'center', gap: '8px' }}>
-             <FiUser color="#D4AF37" /> CAJA: {nombreCajero.toUpperCase()}
+             <FiUser color="#D4AF37" /> CAJA: {String(nombreCajero).toUpperCase()}
           </div>
         </div>
         <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fill, minmax(180px, 1fr))", gap: "15px" }}>
@@ -187,11 +202,10 @@ export default function Venta({ cashDrawer, onCashClosed }) {
         </div>
       </div>
 
-      {/* 3. CARRITO Y PAGO (FIJO, SIN SCROLL) */}
+      {/* 3. CARRITO */}
       <div style={{ width: "380px", borderLeft: "1px solid #222", display: "flex", flexDirection: "column", backgroundColor: "#111" }}>
         <div style={{ padding: "20px", borderBottom: "1px solid #222", color: "#D4AF37", fontWeight: "bold" }}><FiShoppingCart /> COMPRA ACTUAL</div>
         
-        {/* Lista con scroll interno */}
         <div style={{ flex: 1, overflowY: "auto", padding: "20px" }}>
           {cart.map(i => (
             <div key={i.id} style={{ display: "flex", justifyContent: "space-between", marginBottom: "15px", fontSize: "0.9rem", color: "#eee" }}>
@@ -206,7 +220,6 @@ export default function Venta({ cashDrawer, onCashClosed }) {
           ))}
         </div>
 
-        {/* Panel de pago FIJO abajo */}
         <div style={{ padding: "20px", backgroundColor: "#0a0a0a", borderTop: "2px solid #D4AF37" }}>
           <div style={{ display: "flex", justifyContent: "space-between", color: "#666", fontSize: '0.8rem' }}><span>BASE GRAVABLE</span><span>${baseGravable.toLocaleString(undefined, {maximumFractionDigits: 0})}</span></div>
           <div style={{ display: "flex", justifyContent: "space-between", color: "#666", fontSize: '0.8rem', marginBottom: '10px' }}><span>IVA (19%)</span><span>${valorIva.toLocaleString(undefined, {maximumFractionDigits: 0})}</span></div>
