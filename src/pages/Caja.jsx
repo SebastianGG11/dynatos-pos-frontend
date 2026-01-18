@@ -17,11 +17,14 @@ export default function Caja() {
   const loadCash = async () => {
     setLoading(true);
     try {
+      // ✅ Usamos encadenamiento opcional para evitar errores de lectura
       const res = await api.get("/cash/current");
-      setCashDrawer(res.data);
-    } catch {
+      setCashDrawer(res.data || null);
+    } catch (error) {
+      console.error("Error al verificar estado de caja:", error);
       setCashDrawer(null);
     } finally {
+      // ✅ Aseguramos que el loading SIEMPRE se apague
       setLoading(false);
     }
   };
@@ -39,12 +42,12 @@ export default function Caja() {
         flexDirection: "column", justifyContent: "center", alignItems: "center", color: "#D4AF37" 
       }}>
         <div className="animate-spin" style={{ marginBottom: "20px" }}><FiMonitor size={40} /></div>
-        <p style={{ letterSpacing: "2px", fontSize: "0.8rem" }}>INICIALIZANDO TERMINAL DYNATOS...</p>
+        <p style={{ letterSpacing: "2px", fontSize: "0.8rem" }}>CONECTANDO TERMINAL DYNATOS...</p>
       </div>
     );
   }
 
-  // ✅ SI HAY CAJA ABIERTA: Renderizamos el componente de Venta
+  // ✅ SI HAY CAJA ABIERTA
   if (cashDrawer) {
     return (
       <Venta
@@ -54,7 +57,7 @@ export default function Caja() {
     );
   }
 
-  // ❌ NO HAY CAJA ABIERTA: Pantalla de bloqueo Premium
+  // ❌ NO HAY CAJA ABIERTA
   return (
     <div style={{ 
       minHeight: "100vh", backgroundColor: "#000", 
@@ -62,8 +65,7 @@ export default function Caja() {
       backgroundImage: "radial-gradient(circle, #111 0%, #000 100%)"
     }}>
       
-      {/* LOGO O TÍTULO DE BIENVENIDA */}
-      <div style={{ textAlign: "center", marginBottom: "50px", animation: "fadeInDown 0.8s ease" }}>
+      <div style={{ textAlign: "center", marginBottom: "50px" }}>
         <h1 style={{ color: "#D4AF37", fontSize: "3rem", margin: 0, fontFamily: "serif", letterSpacing: "5px" }}>DYNATOS</h1>
         <p style={{ color: "#666", letterSpacing: "3px", fontSize: "0.7rem", marginTop: "10px" }}>MARKET & LICORERÍA</p>
       </div>
@@ -77,8 +79,8 @@ export default function Caja() {
           <>
             <div style={{ color: "#D4AF37", marginBottom: "30px" }}>
               <FiLock size={50} style={{ margin: "0 auto 20px" }} />
-              <h2 style={{ fontSize: "1.2rem", margin: 0 }}>TERMINAL BLOQUEADA</h2>
-              <p style={{ color: "#555", fontSize: "0.8rem", marginTop: "10px" }}>Se requiere apertura de caja para operar</p>
+              <h2 style={{ fontSize: "1.2rem", margin: 0 }}>SISTEMA BLOQUEADO</h2>
+              <p style={{ color: "#555", fontSize: "0.8rem", marginTop: "10px" }}>Apertura de turno requerida</p>
             </div>
 
             <button
@@ -100,7 +102,7 @@ export default function Caja() {
                 display: "flex", alignItems: "center", gap: "8px", fontSize: "0.85rem", margin: "0 auto"
               }}
             >
-              <FiLogOut /> Cerrar sesión de usuario
+              <FiLogOut /> Cerrar sesión
             </button>
           </>
         )}
@@ -108,8 +110,8 @@ export default function Caja() {
         {step === "open_form" && (
           <div style={{ animation: "fadeIn 0.5s ease" }}>
             <div style={{ display: "flex", alignItems: "center", justifyContent: "center", gap: "10px", color: "#D4AF37", marginBottom: "25px" }}>
-               <FiShield size={20} />
-               <span style={{ fontWeight: "bold", letterSpacing: "1px" }}>AUTORIZADO</span>
+                <FiShield size={20} />
+                <span style={{ fontWeight: "bold", letterSpacing: "1px" }}>AUTORIZADO</span>
             </div>
             
             <AbrirCaja
@@ -126,21 +128,19 @@ export default function Caja() {
                 cursor: "pointer", fontSize: "0.8rem", textDecoration: "underline"
               }}
             >
-              Cancelar apertura
+              Volver al inicio
             </button>
           </div>
         )}
       </div>
 
-      {/* FOOTER INFORMATIVO */}
       <div style={{ position: "absolute", bottom: "30px", color: "#333", display: "flex", gap: "30px", fontSize: "0.75rem" }}>
         <div style={{ display: "flex", alignItems: "center", gap: "8px" }}>
           <FiClock /> {new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
         </div>
-        <div>STATION: TERMINAL_01</div>
+        <div>STATION: POS_TERM_01</div>
       </div>
 
-      {/* 🔐 MODAL DE AUTORIZACIÓN ADMIN */}
       {step === "auth_admin" && (
         <AdminAuthModal
           onSuccess={() => setStep("open_form")}
