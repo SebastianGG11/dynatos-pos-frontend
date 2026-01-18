@@ -1,8 +1,8 @@
 import React from 'react';
 import { Link, useLocation, useNavigate } from 'react-router-dom';
 import { 
-  FiHome, FiPackage, FiTag, FiUsers, FiShoppingBag, FiLogOut 
-} from 'react-icons/fi'; 
+  FiHome, FiPackage, FiTag, FiUsers, FiShoppingBag, FiLogOut, FiTruck 
+} from 'react-icons/fi'; // 👈 AQUÍ ESTABA EL ERROR, YA ESTÁ AGREGADO FiTruck
 
 const AdminSidebar = () => {
   const location = useLocation();
@@ -10,15 +10,14 @@ const AdminSidebar = () => {
 
   const handleLogout = () => {
     localStorage.clear();
-    // Usamos assign para asegurar una limpieza total del estado del navegador
-    window.location.assign("/login");
+    window.location.href = "/login"; 
   };
 
   const menuItems = [
     { path: '/admin', icon: <FiHome />, label: 'Dashboard' },
     { path: '/admin/productos', icon: <FiPackage />, label: 'Productos' },
-    { path: '/admin/promociones', icon: <FiTag />, label: 'Promociones' },
     { path: '/admin/compras', icon: <FiTruck />, label: 'Compras' },
+    { path: '/admin/promociones', icon: <FiTag />, label: 'Promociones' },
     { path: '/admin/usuarios', icon: <FiUsers />, label: 'Cajeros' },
     { path: '/admin/ventas', icon: <FiShoppingBag />, label: 'Ventas' },
   ];
@@ -27,7 +26,7 @@ const AdminSidebar = () => {
     <div style={{
       width: '260px',
       height: '100vh',
-      backgroundColor: '#050505', // Negro profundo premium
+      backgroundColor: '#050505',
       color: '#E0E0E0',
       padding: '25px',
       display: 'flex',
@@ -38,7 +37,6 @@ const AdminSidebar = () => {
       top: 0,
       zIndex: 1000
     }}>
-      {/* Logo / Título */}
       <div style={{ marginBottom: '50px', textAlign: 'center' }}>
         <h2 style={{ 
           color: '#D4AF37', 
@@ -55,7 +53,6 @@ const AdminSidebar = () => {
         </span>
       </div>
 
-      {/* Navegación */}
       <nav style={{ flex: 1 }}>
         <ul style={{ listStyle: 'none', padding: 0, margin: 0 }}>
           {menuItems.map((item) => {
@@ -76,18 +73,6 @@ const AdminSidebar = () => {
                     fontWeight: isActive ? 'bold' : 'normal',
                     border: isActive ? '1px solid #D4AF37' : '1px solid transparent'
                   }}
-                  onMouseOver={(e) => {
-                    if (!isActive) {
-                      e.currentTarget.style.color = '#D4AF37';
-                      e.currentTarget.style.border = '1px solid #D4AF37';
-                    }
-                  }}
-                  onMouseOut={(e) => {
-                    if (!isActive) {
-                      e.currentTarget.style.color = '#b3b3b3';
-                      e.currentTarget.style.border = '1px solid transparent';
-                    }
-                  }}
                 >
                   <span style={{ marginRight: '12px', fontSize: '1.3rem', display: 'flex' }}>
                     {item.icon}
@@ -100,7 +85,6 @@ const AdminSidebar = () => {
         </ul>
       </nav>
 
-      {/* Botón Salir */}
       <button 
         onClick={handleLogout}
         style={{
@@ -119,14 +103,6 @@ const AdminSidebar = () => {
           fontWeight: 'bold',
           marginTop: 'auto'
         }}
-        onMouseOver={(e) => {
-          e.currentTarget.style.backgroundColor = '#D4AF37';
-          e.currentTarget.style.color = '#000';
-        }}
-        onMouseOut={(e) => {
-          e.currentTarget.style.backgroundColor = 'transparent';
-          e.currentTarget.style.color = '#D4AF37';
-        }}
       >
         <FiLogOut style={{ marginRight: '10px' }} />
         Cerrar sesión
@@ -135,5 +111,4 @@ const AdminSidebar = () => {
   );
 };
 
-// 🔒 ESTA ES LA LÍNEA CRUCIAL PARA VERCEL:
 export default AdminSidebar;
