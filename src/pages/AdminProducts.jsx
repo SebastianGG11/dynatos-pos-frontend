@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useState } from "react";
 import api from "../api/api";
-import { FiPlus, FiEdit2, FiTrash2, FiPackage, FiImage } from "react-icons/fi"; // Asegúrate de tener react-icons
+import { FiPlus, FiEdit2, FiTrash2, FiPackage, FiImage, FiAlertCircle } from "react-icons/fi";
 
 const EMPTY_FORM = {
   id: null,
@@ -36,9 +36,8 @@ export default function AdminProducts() {
   const [imageFile, setImageFile] = useState(null);
   const [imagePreview, setImagePreview] = useState("");
 
-  useEffect(() => {
-    loadAll();
-  }, []);
+  /* ========================= LOAD DATA ========================= */
+  useEffect(() => { loadAll(); }, []);
 
   const loadAll = async () => {
     setLoading(true);
@@ -56,6 +55,7 @@ export default function AdminProducts() {
     }
   };
 
+  /* ========================= HELPERS ========================= */
   const categoryNameById = useMemo(() => {
     const map = new Map();
     categories.forEach((c) => map.set(String(c.id), c.name));
@@ -73,6 +73,7 @@ export default function AdminProducts() {
     return `${base}/uploads/products/${p.image_filename}`;
   };
 
+  /* ========================= FORM HANDLERS ========================= */
   const openCreate = () => {
     setForm(EMPTY_FORM);
     setImageFile(null);
@@ -122,6 +123,7 @@ export default function AdminProducts() {
     setImagePreview(URL.createObjectURL(file));
   };
 
+  /* ========================= SAVE PRODUCT ========================= */
   const saveProduct = async () => {
     setUiError("");
     if (!form.name.trim()) return setUiError("Nombre obligatorio");
@@ -174,184 +176,154 @@ export default function AdminProducts() {
     }
   };
 
-  if (loading) return (
-    <div className="flex items-center justify-center h-full">
-      <div className="text-[#D4AF37] text-xl animate-pulse font-serif">Cargando inventario...</div>
-    </div>
-  );
+  if (loading) return <div style={{ color: "#D4AF37", padding: "40px", textAlign: "center", fontSize: "1.2rem" }}>Cargando Inventario...</div>;
 
   return (
-    <div className="space-y-6 animate-fade-in">
-      {/* HEADER */}
-      <div className="flex justify-between items-center bg-[#111] p-6 rounded-xl border border-[#D4AF37]/30 shadow-2xl">
+    <div style={{ maxWidth: "1250px", margin: "0 auto", animation: "fadeIn 0.5s ease" }}>
+      
+      {/* HEADER DINÁMICO */}
+      <div style={{
+        display: "flex", justifyContent: "space-between", alignItems: "center",
+        backgroundColor: "#111", padding: "30px", borderRadius: "15px",
+        border: "1px solid #D4AF37", marginBottom: "30px", boxShadow: "0 10px 30px rgba(0,0,0,0.5)"
+      }}>
         <div>
-          <h2 className="text-3xl font-serif text-[#D4AF37] tracking-wider uppercase">Inventario</h2>
-          <p className="text-gray-400 text-sm">Gestión de productos Dynatos Premium</p>
+          <h1 style={{ color: "#D4AF37", margin: 0, fontSize: "2rem", letterSpacing: "3px", fontWeight: "bold" }}>PRODUCTOS</h1>
+          <p style={{ color: "#888", fontSize: "0.9rem", margin: "5px 0 0 0" }}>Dynatos Market & Licorería POS</p>
         </div>
-        <button 
-          className="bg-[#D4AF37] hover:bg-[#B8962E] text-black px-6 py-3 rounded-lg font-bold flex items-center gap-2 transition-all transform hover:scale-105 shadow-lg"
-          onClick={openCreate}
-        >
+        <button onClick={openCreate} style={{
+          backgroundColor: "#D4AF37", color: "#000", border: "none", padding: "14px 28px",
+          borderRadius: "10px", fontWeight: "bold", cursor: "pointer", display: "flex", alignItems: "center", 
+          gap: "10px", fontSize: "1rem", transition: "0.3s"
+        }}>
           <FiPlus size={20} /> NUEVO PRODUCTO
         </button>
       </div>
 
-      {/* FILTROS */}
-      <div className="flex gap-3 overflow-x-auto pb-2 scrollbar-hide">
+      {/* CATEGORÍAS PROFESIONALES */}
+      <div style={{ display: "flex", gap: "12px", marginBottom: "30px", overflowX: "auto", paddingBottom: "10px" }}>
         <button
-          className={`px-5 py-2 rounded-full border transition-all whitespace-nowrap ${
-            selectedCategory === "ALL" 
-            ? "bg-[#D4AF37] border-[#D4AF37] text-black font-bold" 
-            : "bg-transparent border-[#333] text-gray-400 hover:border-[#D4AF37]"
-          }`}
           onClick={() => setSelectedCategory("ALL")}
+          style={{
+            padding: "12px 24px", borderRadius: "10px", border: "1px solid #D4AF37",
+            backgroundColor: selectedCategory === "ALL" ? "#D4AF37" : "transparent",
+            color: selectedCategory === "ALL" ? "#000" : "#D4AF37",
+            fontWeight: "bold", cursor: "pointer", transition: "0.3s", whiteSpace: "nowrap"
+          }}
         >
-          Todas las Categorías
+          TODOS
         </button>
         {categories.map((c) => (
           <button
             key={c.id}
-            className={`px-5 py-2 rounded-full border transition-all whitespace-nowrap ${
-              selectedCategory === String(c.id) 
-              ? "bg-[#D4AF37] border-[#D4AF37] text-black font-bold" 
-              : "bg-transparent border-[#333] text-gray-400 hover:border-[#D4AF37]"
-            }`}
             onClick={() => setSelectedCategory(String(c.id))}
+            style={{
+              padding: "12px 24px", borderRadius: "10px", border: "1px solid #333",
+              backgroundColor: selectedCategory === String(c.id) ? "#D4AF37" : "#111",
+              color: selectedCategory === String(c.id) ? "#000" : "#eee",
+              fontWeight: "bold", cursor: "pointer", transition: "0.3s", whiteSpace: "nowrap"
+            }}
           >
-            {c.name}
+            {c.name.toUpperCase()}
           </button>
         ))}
       </div>
 
       {uiError && (
-        <div className="bg-red-900/30 border border-red-500 text-red-200 p-4 rounded-lg text-sm animate-shake">
-          {uiError}
+        <div style={{ backgroundColor: "#300", color: "#f88", padding: "15px", borderRadius: "10px", border: "1px solid #f00", marginBottom: "20px", display: "flex", alignItems: "center", gap: "10px" }}>
+          <FiAlertCircle /> {uiError}
         </div>
       )}
 
-      {/* MODAL FORM (ESTILO PREMIUM) */}
+      {/* MODAL FORM (REEMPLAZA AL FORMULARIO SIMPLE) */}
       {showForm && (
-        <div className="fixed inset-0 bg-black/80 backdrop-blur-sm z-[1100] flex items-center justify-center p-4">
-          <div className="bg-[#111] border border-[#D4AF37] p-8 rounded-2xl w-full max-w-2xl shadow-2xl overflow-y-auto max-h-[90vh]">
-            <h3 className="text-2xl font-serif text-[#D4AF37] mb-6 flex items-center gap-2">
-              {form.id ? <FiEdit2 /> : <FiPlus />}
-              {form.id ? "EDITAR PRODUCTO" : "REGISTRAR PRODUCTO"}
+        <div style={{ position: "fixed", inset: 0, backgroundColor: "rgba(0,0,0,0.85)", zIndex: 2000, display: "flex", alignItems: "center", justifyContent: "center", padding: "20px" }}>
+          <div style={{ backgroundColor: "#111", border: "1px solid #D4AF37", padding: "40px", borderRadius: "20px", width: "100%", maxWidth: "650px", boxShadow: "0 0 50px rgba(0,0,0,1)" }}>
+            <h3 style={{ color: "#D4AF37", marginTop: 0, marginBottom: "30px", fontSize: "1.5rem" }}>
+              {form.id ? "EDITAR PRODUCTO" : "NUEVO PRODUCTO"}
             </h3>
-
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-5">
-              <div className="md:col-span-2">
-                <label className="text-[#D4AF37] text-xs font-bold mb-1 block">NOMBRE DEL PRODUCTO</label>
-                <input name="name" className="w-full bg-[#0a0a0a] border border-[#333] p-3 rounded-lg text-white focus:border-[#D4AF37] outline-none transition-all"
-                  value={form.name} onChange={handleChange} placeholder="Ej: Whisky Blue Label" />
+            
+            <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "20px" }}>
+              <div style={{ gridColumn: "span 2" }}>
+                <label style={{ color: "#D4AF37", fontSize: "0.8rem", display: "block", marginBottom: "5px" }}>NOMBRE</label>
+                <input name="name" value={form.name} onChange={handleChange} style={{ width: "100%", padding: "12px", borderRadius: "8px", border: "1px solid #333", backgroundColor: "#000", color: "#fff" }} />
               </div>
-
               <div>
-                <label className="text-[#D4AF37] text-xs font-bold mb-1 block">CATEGORÍA</label>
-                <select name="category_id" className="w-full bg-[#0a0a0a] border border-[#333] p-3 rounded-lg text-white focus:border-[#D4AF37] outline-none"
-                  value={form.category_id} onChange={handleChange}>
-                  <option value="">Seleccionar...</option>
-                  {categories.map(c => (
-                    <option key={c.id} value={c.id}>{c.name}</option>
-                  ))}
+                <label style={{ color: "#D4AF37", fontSize: "0.8rem", display: "block", marginBottom: "5px" }}>CATEGORÍA</label>
+                <select name="category_id" value={form.category_id} onChange={handleChange} style={{ width: "100%", padding: "12px", borderRadius: "8px", border: "1px solid #333", backgroundColor: "#000", color: "#fff" }}>
+                  <option value="">Seleccione...</option>
+                  {categories.map(c => <option key={c.id} value={c.id}>{c.name}</option>)}
                 </select>
               </div>
-
               <div>
-                <label className="text-[#D4AF37] text-xs font-bold mb-1 block">STOCK ACTUAL</label>
-                <input name="current_stock" type="number" className="w-full bg-[#0a0a0a] border border-[#333] p-3 rounded-lg text-white focus:border-[#D4AF37] outline-none"
-                  value={form.current_stock} onChange={handleChange} />
+                <label style={{ color: "#D4AF37", fontSize: "0.8rem", display: "block", marginBottom: "5px" }}>STOCK INICIAL</label>
+                <input name="current_stock" type="number" value={form.current_stock} onChange={handleChange} style={{ width: "100%", padding: "12px", borderRadius: "8px", border: "1px solid #333", backgroundColor: "#000", color: "#fff" }} />
               </div>
-
               <div>
-                <label className="text-[#D4AF37] text-xs font-bold mb-1 block">PRECIO DE COMPRA</label>
-                <input name="cost_price" type="number" className="w-full bg-[#0a0a0a] border border-[#333] p-3 rounded-lg text-white focus:border-[#D4AF37] outline-none"
-                  value={form.cost_price} onChange={handleChange} />
+                <label style={{ color: "#D4AF37", fontSize: "0.8rem", display: "block", marginBottom: "5px" }}>COSTO (COMPRA)</label>
+                <input name="cost_price" type="number" value={form.cost_price} onChange={handleChange} style={{ width: "100%", padding: "12px", borderRadius: "8px", border: "1px solid #333", backgroundColor: "#000", color: "#fff" }} />
               </div>
-
               <div>
-                <label className="text-[#D4AF37] text-xs font-bold mb-1 block">PRECIO DE VENTA</label>
-                <input name="sale_price" type="number" className="w-full bg-[#0a0a0a] border border-[#333] p-3 rounded-lg text-white focus:border-[#D4AF37] outline-none"
-                  value={form.sale_price} onChange={handleChange} />
+                <label style={{ color: "#D4AF37", fontSize: "0.8rem", display: "block", marginBottom: "5px" }}>PRECIO VENTA</label>
+                <input name="sale_price" type="number" value={form.sale_price} onChange={handleChange} style={{ width: "100%", padding: "12px", borderRadius: "8px", border: "1px solid #333", backgroundColor: "#000", color: "#fff" }} />
               </div>
-
-              <div className="md:col-span-2">
-                <label className="text-[#D4AF37] text-xs font-bold mb-2 block">IMAGEN DEL PRODUCTO</label>
-                <div className="flex items-center gap-4 bg-[#0a0a0a] p-4 rounded-lg border border-dashed border-[#333]">
-                  {imagePreview ? (
-                    <img src={imagePreview} alt="preview" className="w-20 h-20 object-cover rounded-lg border border-[#D4AF37]" />
-                  ) : (
-                    <div className="w-20 h-20 bg-[#111] rounded-lg flex items-center justify-center text-[#333]">
-                      <FiImage size={30} />
-                    </div>
-                  )}
-                  <input type="file" accept="image/*" className="text-sm text-gray-400 file:mr-4 file:py-2 file:px-4 file:rounded-full file:border-0 file:text-sm file:font-semibold file:bg-[#D4AF37] file:text-black hover:file:bg-[#B8962E] cursor-pointer"
-                    onChange={(e) => handlePickImage(e.target.files?.[0])} />
-                </div>
+              <div style={{ gridColumn: "span 2" }}>
+                <label style={{ color: "#D4AF37", fontSize: "0.8rem", display: "block", marginBottom: "5px" }}>IMAGEN</label>
+                <input type="file" onChange={(e) => handlePickImage(e.target.files?.[0])} style={{ color: "#888" }} />
+                {imagePreview && <img src={imagePreview} style={{ width: "60px", height: "60px", marginTop: "10px", borderRadius: "5px", border: "1px solid #D4AF37", objectFit: "cover" }} alt="prev" />}
               </div>
             </div>
 
-            <div className="flex gap-4 mt-8">
-              <button className="flex-1 bg-transparent border border-[#333] text-gray-400 px-4 py-3 rounded-lg hover:bg-[#222] transition-all" onClick={closeForm}>
-                CANCELAR
-              </button>
-              <button className="flex-1 bg-[#D4AF37] text-black font-bold px-4 py-3 rounded-lg hover:shadow-[0_0_15px_rgba(212,175,55,0.4)] transition-all"
-                onClick={saveProduct} disabled={saving}>
-                {saving ? "GUARDANDO..." : "GUARDAR CAMBIOS"}
+            <div style={{ display: "flex", gap: "15px", marginTop: "30px" }}>
+              <button onClick={closeForm} style={{ flex: 1, padding: "12px", borderRadius: "8px", border: "1px solid #333", backgroundColor: "transparent", color: "#888", cursor: "pointer" }}>CANCELAR</button>
+              <button onClick={saveProduct} disabled={saving} style={{ flex: 1, padding: "12px", borderRadius: "8px", border: "none", backgroundColor: "#D4AF37", color: "#000", fontWeight: "bold", cursor: "pointer" }}>
+                {saving ? "GUARDANDO..." : "GUARDAR"}
               </button>
             </div>
           </div>
         </div>
       )}
 
-      {/* TABLA PREMIUM */}
-      <div className="bg-[#111] rounded-xl border border-[#333] overflow-hidden shadow-2xl">
-        <table className="w-full text-left border-collapse">
+      {/* TABLA PRINCIPAL */}
+      <div style={{ backgroundColor: "#111", borderRadius: "15px", border: "1px solid #222", overflow: "hidden", boxShadow: "0 10px 30px rgba(0,0,0,0.3)" }}>
+        <table style={{ width: "100%", borderCollapse: "collapse", color: "#eee", fontSize: "0.95rem" }}>
           <thead>
-            <tr className="bg-[#1a1a1a] border-b border-[#D4AF37]/20">
-              <th className="p-4 text-[#D4AF37] font-serif uppercase text-xs tracking-widest">Producto</th>
-              <th className="p-4 text-[#D4AF37] font-serif uppercase text-xs tracking-widest">Categoría</th>
-              <th className="p-4 text-[#D4AF37] font-serif uppercase text-xs tracking-widest text-right">Compra</th>
-              <th className="p-4 text-[#D4AF37] font-serif uppercase text-xs tracking-widest text-right">Venta</th>
-              <th className="p-4 text-[#D4AF37] font-serif uppercase text-xs tracking-widest text-right">Ganancia</th>
-              <th className="p-4 text-[#D4AF37] font-serif uppercase text-xs tracking-widest text-center">Stock</th>
-              <th className="p-4 text-[#D4AF37] font-serif uppercase text-xs tracking-widest text-center">Estado</th>
-              <th className="p-4 text-[#D4AF37] font-serif uppercase text-xs tracking-widest text-center">Acciones</th>
+            <tr style={{ backgroundColor: "#1a1a1a", color: "#D4AF37", textAlign: "left" }}>
+              <th style={{ padding: "20px", borderBottom: "1px solid #222" }}>PRODUCTO</th>
+              <th style={{ padding: "20px", borderBottom: "1px solid #222" }}>CATEGORÍA</th>
+              <th style={{ padding: "20px", borderBottom: "1px solid #222", textAlign: "right" }}>VENTA</th>
+              <th style={{ padding: "20px", borderBottom: "1px solid #222", textAlign: "right" }}>GANANCIA</th>
+              <th style={{ padding: "20px", borderBottom: "1px solid #222", textAlign: "center" }}>STOCK</th>
+              <th style={{ padding: "20px", borderBottom: "1px solid #222", textAlign: "center" }}>ACCIONES</th>
             </tr>
           </thead>
-          <tbody className="divide-y divide-[#222]">
+          <tbody>
             {filteredProducts.map(p => (
-              <tr key={p.id} className="hover:bg-[#1a1a1a] transition-all group">
-                <td className="p-4">
-                  <div className="flex items-center gap-3">
-                    <div className="w-10 h-10 rounded bg-[#222] flex items-center justify-center overflow-hidden border border-[#333]">
-                       {p.image_filename ? <img src={resolveImageUrl(p)} alt="" className="w-full h-full object-cover"/> : <FiPackage className="text-[#444]"/>}
+              <tr key={p.id} style={{ borderBottom: "1px solid #222", transition: "0.2s" }} onMouseOver={e => e.currentTarget.style.backgroundColor = "#161616"} onMouseOut={e => e.currentTarget.style.backgroundColor = "transparent"}>
+                <td style={{ padding: "20px" }}>
+                  <div style={{ display: "flex", alignItems: "center", gap: "15px" }}>
+                    <div style={{ width: "45px", height: "45px", backgroundColor: "#000", borderRadius: "8px", display: "flex", alignItems: "center", justifyContent: "center", border: "1px solid #333", overflow: "hidden" }}>
+                      {p.image_filename ? <img src={resolveImageUrl(p)} style={{ width: "100%", height: "100%", objectFit: "cover" }} /> : <FiPackage style={{ color: "#333" }} />}
                     </div>
-                    <span className="font-bold text-gray-200">{p.name}</span>
+                    <span style={{ fontWeight: "bold" }}>{p.name}</span>
                   </div>
                 </td>
-                <td className="p-4 text-gray-400">{categoryNameById.get(String(p.category_id))}</td>
-                <td className="p-4 text-right text-gray-400">{money(p.cost_price)}</td>
-                <td className="p-4 text-right text-[#D4AF37] font-bold">{money(p.sale_price)}</td>
-                <td className="p-4 text-right text-green-500 font-medium">+{money(p.sale_price - p.cost_price)}</td>
-                <td className="p-4 text-center">
-                  <span className={`px-2 py-1 rounded text-xs font-bold ${Number(p.current_stock) < 5 ? "bg-red-900/40 text-red-400" : "bg-blue-900/40 text-blue-400"}`}>
+                <td style={{ padding: "20px", color: "#888" }}>{categoryNameById.get(String(p.category_id))}</td>
+                <td style={{ padding: "20px", textAlign: "right", color: "#D4AF37", fontWeight: "bold" }}>{money(p.sale_price)}</td>
+                <td style={{ padding: "20px", textAlign: "right", color: "#5c5" }}>+{money(p.sale_price - p.cost_price)}</td>
+                <td style={{ padding: "20px", textAlign: "center" }}>
+                  <span style={{ 
+                    padding: "5px 12px", borderRadius: "6px", fontSize: "0.85rem", fontWeight: "bold",
+                    backgroundColor: p.current_stock < 5 ? "#411" : "#114",
+                    color: p.current_stock < 5 ? "#f88" : "#8af",
+                    border: p.current_stock < 5 ? "1px solid #822" : "1px solid #228"
+                  }}>
                     {p.current_stock}
                   </span>
                 </td>
-                <td className="p-4 text-center">
-                  <span className={`text-[10px] uppercase px-2 py-1 rounded-full border ${p.is_active ? "border-green-500 text-green-500" : "border-gray-600 text-gray-600"}`}>
-                    {p.is_active ? "Activo" : "Inactivo"}
-                  </span>
-                </td>
-                <td className="p-4 text-center">
-                  <div className="flex justify-center gap-2">
-                    <button className="p-2 bg-[#222] text-[#D4AF37] rounded hover:bg-[#D4AF37] hover:text-black transition-all" onClick={() => openEdit(p)}>
-                      <FiEdit2 size={16}/>
-                    </button>
-                    <button className="p-2 bg-[#222] text-red-500 rounded hover:bg-red-500 hover:text-white transition-all" onClick={() => hardDelete(p)}>
-                      <FiTrash2 size={16}/>
-                    </button>
-                  </div>
+                <td style={{ padding: "20px", textAlign: "center" }}>
+                  <button onClick={() => openEdit(p)} style={{ background: "none", border: "none", color: "#D4AF37", cursor: "pointer", marginRight: "15px" }}><FiEdit2 size={18} /></button>
+                  <button onClick={() => hardDelete(p)} style={{ background: "none", border: "none", color: "#f55", cursor: "pointer" }}><FiTrash2 size={18} /></button>
                 </td>
               </tr>
             ))}
