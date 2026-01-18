@@ -8,12 +8,14 @@ import Caja from "./pages/Caja.jsx";
 import AdminLayout from "./components/AdminLayout.jsx";
 
 // ✅ Páginas del admin
-import AdminHome from "./pages/AdminHome.jsx";
+import Dashboard from "./pages/Dashboard.jsx"; // <--- 1. IMPORTAMOS EL DASHBOARD NUEVO
+// import AdminHome from "./pages/AdminHome.jsx"; // (Opcional: Lo reemplazamos por el Dashboard)
 import AdminProducts from "./pages/AdminProducts.jsx";
 import AdminUsers from "./pages/AdminUsers.jsx";
 import AdminSales from "./pages/AdminSales.jsx";
 import AdminPromotions from "./pages/AdminPromotions.jsx";
 import AdminPurchases from "./pages/AdminPurchases.jsx";
+
 function getUserSafe() {
   try {
     return JSON.parse(localStorage.getItem("user") || "null");
@@ -56,7 +58,7 @@ export default function App() {
         {/* Login */}
         <Route path="/login" element={<Login />} />
 
-        {/* Home dinámico */}
+        {/* Home dinámico (Redirecciona según rol) */}
         <Route
           path="/"
           element={
@@ -89,12 +91,17 @@ export default function App() {
             </Protected>
           }
         >
-          <Route index element={<AdminHome />} />
+          {/* 2. AQUÍ EL CAMBIO: El index ahora es el Dashboard visual */}
+          <Route index element={<Dashboard />} />
+          
           <Route path="productos" element={<AdminProducts />} />
           <Route path="compras" element={<AdminPurchases />} />
           <Route path="promociones" element={<AdminPromotions />} />
           <Route path="usuarios" element={<AdminUsers />} />
           <Route path="ventas" element={<AdminSales />} />
+          
+          {/* Si quieres tener el Dashboard también en una ruta explícita: */}
+          <Route path="dashboard" element={<Dashboard />} />
         </Route>
 
         {/* Fallback */}
