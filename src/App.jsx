@@ -13,7 +13,7 @@ import AdminProducts from "./pages/AdminProducts.jsx";
 import AdminUsers from "./pages/AdminUsers.jsx";
 import AdminSales from "./pages/AdminSales.jsx";
 import AdminPromotions from "./pages/AdminPromotions.jsx";
-
+import AdminPurchases from "./pages/AdminPurchases.jsx";
 function getUserSafe() {
   try {
     return JSON.parse(localStorage.getItem("user") || "null");
