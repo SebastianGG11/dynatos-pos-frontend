@@ -1,7 +1,7 @@
 import { useEffect, useState } from "react";
 import api from "../api/api";
 import { Link } from "react-router-dom";
-import { FiBox, FiDollarSign, FiAlertTriangle, FiShoppingBag, FiUsers, FiPlusCircle, FiList } from "react-icons/fi";
+import { FiBox, FiDollarSign, FiAlertTriangle, FiShoppingBag, FiUsers, FiPlusCircle, FiList, FiClock, FiCheckCircle } from "react-icons/fi";
 
 export default function Dashboard() {
   const [stats, setStats] = useState({
@@ -12,7 +12,6 @@ export default function Dashboard() {
     lowStockItems: [],
     lastTransactions: []
   });
-  const [loading, setLoading] = useState(true);
 
   useEffect(() => {
     const loadStats = async () => {
@@ -21,8 +20,6 @@ export default function Dashboard() {
         setStats(res.data);
       } catch (e) {
         console.error("Error cargando dashboard:", e);
-      } finally {
-        setLoading(false);
       }
     };
     loadStats();
@@ -37,7 +34,7 @@ export default function Dashboard() {
         <p style={{ color: "#666", marginTop: "5px" }}>Resumen operativo de Dynatos Market</p>
       </div>
 
-      {/* 1. TARJETAS DE MÉTRICAS GENERALES */}
+      {/* 1. TARJETAS DE MÉTRICAS */}
       <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(240px, 1fr))", gap: "20px", marginBottom: "40px" }}>
         
         {/* Total Dinero */}
@@ -46,7 +43,7 @@ export default function Dashboard() {
             <FiDollarSign size={28} color="#D4AF37" />
           </div>
           <div>
-            <p style={{ color: "#888", margin: 0, fontSize: "0.85rem", textTransform: "uppercase" }}>Ventas Totales</p>
+            <p style={{ color: "#888", margin: 0, fontSize: "0.85rem", textTransform: "uppercase" }}>Ventas Históricas</p>
             <h2 style={{ color: "#fff", margin: "5px 0 0 0", fontSize: "1.6rem" }}>${Number(stats.totalMoney).toLocaleString()}</h2>
           </div>
         </div>
@@ -78,13 +75,13 @@ export default function Dashboard() {
 
       <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(350px, 1fr))", gap: "30px" }}>
         
-        {/* 2. LISTA DE STOCK BAJO (MUY ÚTIL) */}
+        {/* 2. LISTA DE STOCK BAJO */}
         <div style={{ backgroundColor: "#111", borderRadius: "15px", border: "1px solid #333", overflow: "hidden", display: 'flex', flexDirection: 'column' }}>
           <div style={{ padding: "20px", borderBottom: "1px solid #222", display: "flex", justifyContent: "space-between", alignItems: "center" }}>
             <h3 style={{ color: "#fff", margin: 0, fontSize: "1rem", display: 'flex', alignItems: 'center', gap: '10px' }}>
-              <FiAlertTriangle color="#ff4444" /> Productos por Agotarse
+              <FiAlertTriangle color="#ff4444" /> Inventario Crítico
             </h3>
-            <Link to="/admin/productos" style={{ color: "#D4AF37", fontSize: "0.8rem", textDecoration: "none" }}>Ver Inventario &rarr;</Link>
+            <Link to="/admin/productos" style={{ color: "#D4AF37", fontSize: "0.8rem", textDecoration: "none" }}>Gestionar &rarr;</Link>
           </div>
           <div style={{ padding: "0", flex: 1, maxHeight: "300px", overflowY: "auto" }}>
             {stats.lowStockItems.length > 0 ? (
@@ -102,56 +99,59 @@ export default function Dashboard() {
               </table>
             ) : (
               <div style={{ padding: "30px", textAlign: "center", color: "#666" }}>
-                <FiBox size={40} style={{ marginBottom: "10px", opacity: 0.5 }} />
-                <p>¡Inventario saludable! No hay alertas.</p>
+                <FiCheckCircle size={40} style={{ marginBottom: "10px", opacity: 0.5, color: '#32CD32' }} />
+                <p>¡Inventario saludable!</p>
               </div>
             )}
           </div>
         </div>
 
-        {/* 3. ACCESOS RÁPIDOS Y ACTIVIDAD */}
+        {/* 3. COLUMNA DERECHA: ACCESOS Y ÚLTIMAS VENTAS REALES */}
         <div style={{ display: "flex", flexDirection: "column", gap: "20px" }}>
           
-          {/* Botones de Acción */}
-          <div style={{ backgroundColor: "#111", padding: "25px", borderRadius: "15px", border: "1px solid #333" }}>
-            <h3 style={{ color: "#D4AF37", margin: "0 0 20px 0", fontSize: "1rem" }}>Accesos Rápidos</h3>
-            <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "15px" }}>
-              <Link to="/admin/productos" style={{ textDecoration: "none" }}>
-                <div style={{ background: "#222", padding: "15px", borderRadius: "10px", textAlign: "center", border: "1px solid #333", transition: "0.2s" }} onMouseOver={e => e.currentTarget.style.borderColor = "#D4AF37"} onMouseOut={e => e.currentTarget.style.borderColor = "#333"}>
-                  <FiPlusCircle size={24} color="#D4AF37" style={{ marginBottom: "10px" }} />
-                  <p style={{ margin: 0, color: "#fff", fontSize: "0.9rem" }}>Gestionar Productos</p>
-                </div>
+          {/* Accesos Rápidos */}
+          <div style={{ backgroundColor: "#111", padding: "20px", borderRadius: "15px", border: "1px solid #333" }}>
+            <h3 style={{ color: "#D4AF37", margin: "0 0 15px 0", fontSize: "1rem" }}>Acceso Rápido</h3>
+            <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "10px" }}>
+              <Link to="/admin/productos" style={{ textDecoration: "none", background: "#222", padding: "12px", borderRadius: "8px", textAlign: "center", border: "1px solid #333", color: "#fff", fontSize: "0.9rem" }}>
+                 <FiPlusCircle style={{ marginRight: '5px', verticalAlign: 'middle' }}/> Productos
               </Link>
-              <Link to="/admin/ventas" style={{ textDecoration: "none" }}>
-                <div style={{ background: "#222", padding: "15px", borderRadius: "10px", textAlign: "center", border: "1px solid #333", transition: "0.2s" }} onMouseOver={e => e.currentTarget.style.borderColor = "#D4AF37"} onMouseOut={e => e.currentTarget.style.borderColor = "#333"}>
-                  <FiList size={24} color="#D4AF37" style={{ marginBottom: "10px" }} />
-                  <p style={{ margin: 0, color: "#fff", fontSize: "0.9rem" }}>Historial Ventas</p>
-                </div>
+              <Link to="/admin/ventas" style={{ textDecoration: "none", background: "#222", padding: "12px", borderRadius: "8px", textAlign: "center", border: "1px solid #333", color: "#fff", fontSize: "0.9rem" }}>
+                 <FiList style={{ marginRight: '5px', verticalAlign: 'middle' }}/> Historial
               </Link>
-              <Link to="/admin/usuarios" style={{ textDecoration: "none" }}>
-                <div style={{ background: "#222", padding: "15px", borderRadius: "10px", textAlign: "center", border: "1px solid #333", transition: "0.2s" }} onMouseOver={e => e.currentTarget.style.borderColor = "#D4AF37"} onMouseOut={e => e.currentTarget.style.borderColor = "#333"}>
-                  <FiUsers size={24} color="#D4AF37" style={{ marginBottom: "10px" }} />
-                  <p style={{ margin: 0, color: "#fff", fontSize: "0.9rem" }}>Usuarios</p>
-                </div>
+              <Link to="/admin/usuarios" style={{ textDecoration: "none", background: "#222", padding: "12px", borderRadius: "8px", textAlign: "center", border: "1px solid #333", color: "#fff", fontSize: "0.9rem" }}>
+                 <FiUsers style={{ marginRight: '5px', verticalAlign: 'middle' }}/> Usuarios
               </Link>
-              <Link to="/admin/compras" style={{ textDecoration: "none" }}>
-                <div style={{ background: "#222", padding: "15px", borderRadius: "10px", textAlign: "center", border: "1px solid #333", transition: "0.2s" }} onMouseOver={e => e.currentTarget.style.borderColor = "#D4AF37"} onMouseOut={e => e.currentTarget.style.borderColor = "#333"}>
-                  <FiShoppingBag size={24} color="#D4AF37" style={{ marginBottom: "10px" }} />
-                  <p style={{ margin: 0, color: "#fff", fontSize: "0.9rem" }}>Compras</p>
-                </div>
+              <Link to="/admin/compras" style={{ textDecoration: "none", background: "#222", padding: "12px", borderRadius: "8px", textAlign: "center", border: "1px solid #333", color: "#fff", fontSize: "0.9rem" }}>
+                 <FiShoppingBag style={{ marginRight: '5px', verticalAlign: 'middle' }}/> Compras
               </Link>
             </div>
           </div>
 
-          {/* Últimas Transacciones (Lista simple) */}
+          {/* ÚLTIMAS VENTAS (AHORA SÍ REALES) */}
           <div style={{ backgroundColor: "#111", padding: "20px", borderRadius: "15px", border: "1px solid #333", flex: 1 }}>
-            <h3 style={{ color: "#fff", margin: "0 0 15px 0", fontSize: "0.9rem", opacity: 0.8 }}>Últimas ventas registradas</h3>
-            {stats.lastTransactions.map(tx => (
-              <div key={tx.id} style={{ display: "flex", justifyContent: "space-between", padding: "10px 0", borderBottom: "1px solid #222", fontSize: "0.85rem" }}>
-                <span style={{ color: "#666" }}>#{tx.id}</span>
-                <span style={{ color: "#fff" }}>${Number(tx.total).toLocaleString()}</span>
-              </div>
-            ))}
+            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '15px' }}>
+               <h3 style={{ color: "#fff", margin: 0, fontSize: "0.9rem", display: 'flex', alignItems: 'center', gap: '8px' }}>
+                 <FiClock /> Actividad Reciente
+               </h3>
+               <span style={{ fontSize: '0.7rem', color: '#666', border: '1px solid #333', padding: '2px 6px', borderRadius: '4px' }}>COMPLETADAS</span>
+            </div>
+            
+            {stats.lastTransactions.length > 0 ? (
+              stats.lastTransactions.map(tx => (
+                <div key={tx.id} style={{ display: "flex", justifyContent: "space-between", alignItems: "center", padding: "12px 0", borderBottom: "1px solid #222", fontSize: "0.85rem" }}>
+                  <div>
+                    <span style={{ color: "#D4AF37", fontWeight: 'bold', display: 'block' }}>${Number(tx.total).toLocaleString()}</span>
+                    <span style={{ color: "#666", fontSize: "0.75rem" }}>
+                      {new Date(tx.created_at).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })} • {tx.cajero}
+                    </span>
+                  </div>
+                  <span style={{ color: "#444", fontSize: '0.8rem' }}>#{tx.id}</span>
+                </div>
+              ))
+            ) : (
+              <p style={{ color: "#666", fontSize: "0.8rem", textAlign: "center", padding: "20px" }}>No hay ventas recientes.</p>
+            )}
           </div>
 
         </div>
