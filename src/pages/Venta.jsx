@@ -18,8 +18,10 @@ export default function Venta({ cashDrawer, onCashClosed }) {
   // ✅ Nombre dinámico del cajero
   const nombreCajero = cashDrawer?.user_full_name || 
                      localStorage.getItem('user_full_name') || 
-                     localStorage.getItem('user_name') || 
-                     "Usuario Dynatos";
+                     localStorage.getItem('full_name') || 
+                     localStorage.getItem('user') || 
+                     localStorage.getItem('username') || 
+                     "Cajer@";
 
   useEffect(() => { loadAll(); }, []);
 
