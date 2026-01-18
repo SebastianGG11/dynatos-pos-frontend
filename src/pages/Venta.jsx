@@ -16,7 +16,10 @@ export default function Venta({ cashDrawer, onCashClosed }) {
   const [showCloseCash, setShowCloseCash] = useState(false);
 
   // ✅ Nombre dinámico del cajero
-  const nombreCajero = cashDrawer?.user_full_name || localStorage.getItem('user_name') || "Cajero Turno";
+  const nombreCajero = cashDrawer?.user_full_name || 
+                     localStorage.getItem('user_full_name') || 
+                     localStorage.getItem('user_name') || 
+                     "Usuario Dynatos";
 
   useEffect(() => { loadAll(); }, []);
 
