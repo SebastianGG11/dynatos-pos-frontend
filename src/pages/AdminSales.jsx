@@ -1,6 +1,6 @@
 import { useState, useEffect } from "react";
 import api from "../api/api";
-import { FiSearch, FiDownload, FiChevronDown, FiChevronUp, FiRotateCcw } from "react-icons/fi"; // Quité FiPrinter
+import { FiSearch, FiDownload, FiChevronDown, FiChevronUp, FiRotateCcw, FiX, FiCheckCircle } from "react-icons/fi";
 import ExcelJS from "exceljs";
 import { saveAs } from "file-saver";
 
@@ -14,6 +14,13 @@ export default function AdminSales() {
   const [expandedSaleId, setExpandedSaleId] = useState(null);
   const [saleDetails, setSaleDetails] = useState(null);
   const [loadingDetails, setLoadingDetails] = useState(false);
+
+  // ESTADOS PARA EL MODAL DE DEVOLUCIÓN
+  const [showReturnModal, setShowReturnModal] = useState(false);
+  const [returnItem, setReturnItem] = useState(null); // Producto seleccionado para devolver
+  const [returnQty, setReturnQty] = useState(1);
+  const [returnReason, setReturnReason] = useState("");
+  const [isProcessingReturn, setIsProcessingReturn] = useState(false);
 
   useEffect(() => { fetchSales(); }, [startDate, endDate]);
 
@@ -39,10 +46,51 @@ export default function AdminSales() {
       const res = await api.get(`/sales/${saleId}`);
       setSaleDetails(res.data);
     } catch (error) {
-      console.error("Error cargando detalles", error);
       alert("No se pudo cargar el detalle.");
     } finally {
       setLoadingDetails(false);
+    }
+  };
+
+  const openReturnModal = () => {
+    if (!saleDetails) return;
+    setShowReturnModal(true);
+    setReturnItem(saleDetails.items[0]); // Seleccionar el primero por defecto
+    setReturnQty(1);
+    setReturnReason("");
+  };
+
+  const handleProcessReturn = async () => {
+    if (!returnItem) return alert("Selecciona un producto");
+    if (returnQty <= 0 || returnQty > returnItem.quantity) return alert("Cantidad inválida");
+    if (!returnReason.trim()) return alert("Escribe una razón para la devolución");
+
+    if (!window.confirm(`¿Estás seguro de devolver ${returnQty}x ${returnItem.product_name || item.name}? \n\nEsta acción devolverá el producto al stock y restará el dinero de la caja.`)) {
+      return;
+    }
+
+    setIsProcessingReturn(true);
+    try {
+      // Calculamos cuánto dinero devolver (proporcional al precio unitario real pagado)
+      const amountToReturn = (Number(returnItem.unit_price) * returnQty);
+
+      await api.post('/sales/return', {
+        sale_id: saleDetails.id,
+        product_id: returnItem.product_id,
+        quantity: returnQty,
+        reason: returnReason,
+        amount_to_return: amountToReturn
+      });
+
+      alert("✅ Devolución procesada con éxito. El stock ha sido actualizado.");
+      setShowReturnModal(false);
+      fetchSales(); // Recargar lista
+      setExpandedSaleId(null); // Cerrar detalle
+    } catch (error) {
+      console.error(error);
+      alert("Error procesando devolución: " + (error.response?.data?.message || "Error interno"));
+    } finally {
+      setIsProcessingReturn(false);
     }
   };
 
@@ -175,7 +223,7 @@ export default function AdminSales() {
                                   {saleDetails.items.map((item, idx) => (
                                     <tr key={idx} style={{ borderBottom: '1px solid #222' }}>
                                       <td style={{ padding: "8px 0" }}>x{item.quantity}</td>
-                                      <td style={{ padding: "8px 0", color: "#eee" }}>{item.name || item.product_name || "Producto sin nombre"}</td>
+                                      <td style={{ padding: "8px 0", color: "#eee" }}>{item.product_name || item.name || "Producto"}</td>
                                       <td style={{ padding: "8px 0", textAlign: "right", color: "#D4AF37" }}>${Number(item.total_price || (item.quantity * item.unit_price)).toLocaleString()}</td>
                                     </tr>
                                   ))}
@@ -199,10 +247,10 @@ export default function AdminSales() {
                                 <span style={{ color: '#D4AF37' }}>${Number(saleDetails.total).toLocaleString()}</span>
                               </div>
 
-                              {/* BOTÓN DE DEVOLUCIÓN */}
+                              {/* BOTÓN DE DEVOLUCIÓN (AHORA ABRE MODAL) */}
                               <div style={{ marginTop: "25px" }}>
                                 <button 
-                                  onClick={() => alert("Próximamente: Módulo de Devoluciones")} 
+                                  onClick={openReturnModal}
                                   style={{ width: '100%', padding: "12px", background: "#330000", border: "1px solid #ff4444", color: "#ff4444", borderRadius: "5px", cursor: "pointer", display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '8px', fontWeight: 'bold' }}
                                 >
                                   <FiRotateCcw /> SOLICITAR DEVOLUCIÓN
@@ -222,6 +270,95 @@ export default function AdminSales() {
           </tbody>
         </table>
       </div>
+
+      {/* ================= MODAL DE DEVOLUCIÓN ================= */}
+      {showReturnModal && saleDetails && (
+        <div style={{ position: 'fixed', inset: 0, backgroundColor: 'rgba(0,0,0,0.85)', display: 'flex', justifyContent: 'center', alignItems: 'center', zIndex: 1000, animation: 'fadeIn 0.2s' }}>
+          <div style={{ backgroundColor: '#111', padding: '30px', borderRadius: '15px', border: '1px solid #D4AF37', width: '90%', maxWidth: '500px', position: 'relative' }}>
+            
+            <button onClick={() => setShowReturnModal(false)} style={{ position: 'absolute', top: '15px', right: '15px', background: 'none', border: 'none', color: '#666', cursor: 'pointer' }}><FiX size={24} /></button>
+            
+            <h2 style={{ color: '#D4AF37', marginTop: 0, display: 'flex', alignItems: 'center', gap: '10px' }}>
+              <FiRotateCcw /> Procesar Devolución
+            </h2>
+            <p style={{ color: '#888', fontSize: '0.9rem', borderBottom: '1px solid #333', paddingBottom: '15px' }}>
+              Venta #{saleDetails.id} • Cajero: {saleDetails.cajero}
+            </p>
+
+            <div style={{ display: 'flex', flexDirection: 'column', gap: '15px', marginTop: '20px' }}>
+              
+              {/* SELECTOR DE PRODUCTO */}
+              <div>
+                <label style={{ color: '#fff', fontSize: '0.85rem', display: 'block', marginBottom: '5px' }}>Producto a devolver:</label>
+                <select 
+                  style={{ width: '100%', padding: '12px', background: '#222', border: '1px solid #444', color: '#fff', borderRadius: '8px' }}
+                  onChange={(e) => {
+                    const selected = saleDetails.items.find(i => i.product_id === Number(e.target.value));
+                    setReturnItem(selected);
+                    setReturnQty(1); // Resetear cantidad
+                  }}
+                  value={returnItem?.product_id}
+                >
+                  {saleDetails.items.map(item => (
+                    <option key={item.product_id} value={item.product_id}>
+                      {item.product_name || item.name} (Comprados: {item.quantity})
+                    </option>
+                  ))}
+                </select>
+              </div>
+
+              {/* CANTIDAD */}
+              <div>
+                <label style={{ color: '#fff', fontSize: '0.85rem', display: 'block', marginBottom: '5px' }}>Cantidad:</label>
+                <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
+                  <input 
+                    type="number" 
+                    min="1" 
+                    max={returnItem?.quantity} 
+                    value={returnQty}
+                    onChange={(e) => setReturnQty(Number(e.target.value))}
+                    style={{ flex: 1, padding: '12px', background: '#222', border: '1px solid #444', color: '#fff', borderRadius: '8px' }}
+                  />
+                  <span style={{ color: '#666', fontSize: '0.8rem' }}>Máx: {returnItem?.quantity}</span>
+                </div>
+              </div>
+
+              {/* RAZÓN */}
+              <div>
+                <label style={{ color: '#fff', fontSize: '0.85rem', display: 'block', marginBottom: '5px' }}>Motivo:</label>
+                <input 
+                  type="text" 
+                  placeholder="Ej: Producto dañado, Vencido, Error en pedido..." 
+                  value={returnReason}
+                  onChange={(e) => setReturnReason(e.target.value)}
+                  style={{ width: '100%', padding: '12px', background: '#222', border: '1px solid #444', color: '#fff', borderRadius: '8px', boxSizing: 'border-box' }}
+                />
+              </div>
+
+              {/* RESUMEN DINERO */}
+              <div style={{ background: 'rgba(212, 175, 55, 0.1)', padding: '15px', borderRadius: '8px', border: '1px solid rgba(212, 175, 55, 0.3)', marginTop: '10px' }}>
+                <div style={{ display: 'flex', justifyContent: 'space-between', color: '#D4AF37', fontWeight: 'bold' }}>
+                  <span>Reembolso Total:</span>
+                  <span>${(Number(returnItem?.unit_price || 0) * returnQty).toLocaleString()}</span>
+                </div>
+                <p style={{ margin: '5px 0 0 0', fontSize: '0.75rem', color: '#888' }}>
+                  * Este valor se restará de la caja actual.
+                </p>
+              </div>
+
+              <button 
+                onClick={handleProcessReturn}
+                disabled={isProcessingReturn}
+                style={{ width: '100%', padding: '15px', background: '#D4AF37', color: '#000', border: 'none', borderRadius: '8px', fontWeight: 'bold', cursor: 'pointer', marginTop: '10px', opacity: isProcessingReturn ? 0.5 : 1 }}
+              >
+                {isProcessingReturn ? 'Procesando...' : 'CONFIRMAR DEVOLUCIÓN'}
+              </button>
+
+            </div>
+          </div>
+        </div>
+      )}
+
     </div>
   );
 }
