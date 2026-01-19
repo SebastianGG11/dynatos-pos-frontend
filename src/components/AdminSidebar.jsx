@@ -1,8 +1,9 @@
 import React from 'react';
 import { Link, useLocation, useNavigate } from 'react-router-dom';
+// 👇 AGREGUÉ FiAlertTriangle PARA EL ICONO DE DEVOLUCIONES
 import { 
-  FiHome, FiPackage, FiTag, FiUsers, FiShoppingBag, FiLogOut, FiTruck 
-} from 'react-icons/fi'; // 👈 AQUÍ ESTABA EL ERROR, YA ESTÁ AGREGADO FiTruck
+  FiHome, FiPackage, FiTag, FiUsers, FiShoppingBag, FiLogOut, FiTruck, FiAlertTriangle 
+} from 'react-icons/fi';
 
 const AdminSidebar = () => {
   const location = useLocation();
@@ -20,6 +21,8 @@ const AdminSidebar = () => {
     { path: '/admin/promociones', icon: <FiTag />, label: 'Promociones' },
     { path: '/admin/usuarios', icon: <FiUsers />, label: 'Cajeros' },
     { path: '/admin/ventas', icon: <FiShoppingBag />, label: 'Ventas' },
+    // 👇 AQUÍ ESTÁ EL NUEVO BOTÓN
+    { path: '/admin/returns', icon: <FiAlertTriangle />, label: 'Devoluciones' },
   ];
 
   return (

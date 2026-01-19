@@ -8,13 +8,13 @@ import Caja from "./pages/Caja.jsx";
 import AdminLayout from "./components/AdminLayout.jsx";
 
 // ✅ Páginas del admin
-import Dashboard from "./pages/Dashboard.jsx"; // <--- 1. IMPORTAMOS EL DASHBOARD NUEVO
-// import AdminHome from "./pages/AdminHome.jsx"; // (Opcional: Lo reemplazamos por el Dashboard)
+import Dashboard from "./pages/Dashboard.jsx";
 import AdminProducts from "./pages/AdminProducts.jsx";
 import AdminUsers from "./pages/AdminUsers.jsx";
 import AdminSales from "./pages/AdminSales.jsx";
 import AdminPromotions from "./pages/AdminPromotions.jsx";
 import AdminPurchases from "./pages/AdminPurchases.jsx";
+import AdminReturns from "./pages/AdminReturns.jsx"; // 👈 1. NUEVA IMPORTACIÓN
 
 function getUserSafe() {
   try {
@@ -91,7 +91,7 @@ export default function App() {
             </Protected>
           }
         >
-          {/* 2. AQUÍ EL CAMBIO: El index ahora es el Dashboard visual */}
+          {/* Dashboard Visual */}
           <Route index element={<Dashboard />} />
           
           <Route path="productos" element={<AdminProducts />} />
@@ -99,8 +99,8 @@ export default function App() {
           <Route path="promociones" element={<AdminPromotions />} />
           <Route path="usuarios" element={<AdminUsers />} />
           <Route path="ventas" element={<AdminSales />} />
+          <Route path="returns" element={<AdminReturns />} /> {/* 👈 2. NUEVA RUTA AQUÍ */}
           
-          {/* Si quieres tener el Dashboard también en una ruta explícita: */}
           <Route path="dashboard" element={<Dashboard />} />
         </Route>
 
