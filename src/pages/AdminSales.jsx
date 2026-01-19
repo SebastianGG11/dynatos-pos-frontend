@@ -57,51 +57,10 @@ export default function AdminSales() {
     return { baseGravable, valorImpuesto };
   };
 
-  const exportPremiumExcel = async () => {
-    if (sales.length === 0) { alert("No hay datos"); return; }
-    const workbook = new ExcelJS.Workbook();
-    workbook.creator = 'Dynatos POS';
-
-    const salesByMonth = sales.reduce((acc, sale) => {
-      const date = new Date(sale.created_at);
-      const monthName = date.toLocaleString('es-CO', { month: 'long', year: 'numeric' });
-      const key = monthName.charAt(0).toUpperCase() + monthName.slice(1);
-      if (!acc[key]) acc[key] = [];
-      acc[key].push(sale);
-      return acc;
-    }, {});
-
-    for (const [monthName, monthSales] of Object.entries(salesByMonth)) {
-      const sheet = workbook.addWorksheet(monthName);
-      sheet.columns = [
-        { header: 'FOLIO', key: 'id', width: 12 },
-        { header: 'FECHA Y HORA', key: 'created_at', width: 25 },
-        { header: 'CAJERO', key: 'cajero', width: 25 },
-        { header: 'MÉTODO PAGO', key: 'method', width: 20 },
-        { header: 'TOTAL VENTA', key: 'total', width: 20 },
-      ];
-      let totalMes = 0;
-      monthSales.forEach(sale => {
-        totalMes += Number(sale.total);
-        sheet.addRow({
-          id: sale.id,
-          created_at: new Date(sale.created_at).toLocaleString(),
-          cajero: sale.cajero,
-          method: sale.payment_method,
-          total: Number(sale.total)
-        });
-      });
-      sheet.addRow(['', '', '', 'TOTAL MES:', totalMes]);
-    }
-
-    const buffer = await workbook.xlsx.writeBuffer();
-    saveAs(new Blob([buffer]), `Reporte_Dynatos_Black.xlsx`);
-  };
-
   return (
-    <div style={{ maxWidth: "1200px", margin: "0 auto", padding: "20px" }}>
+    <div style={{ maxWidth: "1200px", margin: "0 auto", animation: "fadeIn 0.5s ease", padding: "20px" }}>
 
-      {/* CSS SOLO PARA IMPRESIÓN */}
+      {/* CSS SOLO PARA IMPRIMIR (NO AFECTA VISTA NORMAL) */}
       <style>
         {`
           @media print {
@@ -116,55 +75,87 @@ export default function AdminSales() {
               left: 0;
               top: 0;
               width: 100%;
-              background: #fff;
-              color: #000;
-              padding: 20px;
             }
           }
         `}
       </style>
 
-      {/* TABLA */}
+      {/* TABLA PRINCIPAL */}
       <div style={{ backgroundColor: "#111", borderRadius: "15px", border: "1px solid #222", overflow: "hidden" }}>
         <table style={{ width: "100%", borderCollapse: "collapse", color: "#eee" }}>
           <tbody>
             {sales.map((sale) => (
               <>
-                <tr key={sale.id}>
-                  <td style={{ padding: "20px" }}>#{sale.id}</td>
+                <tr key={sale.id} style={{ borderBottom: "1px solid #222" }}>
+                  <td style={{ padding: "20px", color: "#666" }}>#{sale.id}</td>
                   <td style={{ padding: "20px" }}>{new Date(sale.created_at).toLocaleString()}</td>
                   <td style={{ padding: "20px" }}>{sale.cajero}</td>
                   <td style={{ padding: "20px" }}>{sale.payment_method}</td>
-                  <td style={{ padding: "20px", color: "#D4AF37" }}>${Number(sale.total).toLocaleString()}</td>
-                  <td>
-                    <button onClick={() => toggleDetails(sale.id)}>
+                  <td style={{ padding: "20px", textAlign: "right", color: "#D4AF37", fontWeight: "bold" }}>
+                    ${Number(sale.total).toLocaleString()}
+                  </td>
+                  <td style={{ padding: "20px", textAlign: "center" }}>
+                    <button
+                      onClick={() => toggleDetails(sale.id)}
+                      style={{ background: "none", border: "none", color: "#D4AF37", cursor: "pointer" }}
+                    >
                       {expandedSaleId === sale.id ? <FiChevronUp /> : <FiChevronDown />} Ver
                     </button>
                   </td>
                 </tr>
 
-                {expandedSaleId === sale.id && saleDetails && (
+                {expandedSaleId === sale.id && (
                   <tr>
-                    <td colSpan="6">
-                      <div id="print-sale">
-                        <h3>Productos Vendidos</h3>
-                        <table width="100%">
+                    <td colSpan="6" style={{ background: "#0a0a0a" }}>
+                      <div id="print-sale" style={{ padding: "25px" }}>
+
+                        {/* PRODUCTOS */}
+                        <h4 style={{ color: "#fff", borderBottom: "1px solid #333", paddingBottom: "10px" }}>
+                          Productos Vendidos
+                        </h4>
+
+                        <table style={{ width: "100%", color: "#ccc" }}>
                           <tbody>
-                            {saleDetails.items.map((item, idx) => (
-                              <tr key={idx}>
+                            {saleDetails?.items?.map((item, idx) => (
+                              <tr key={idx} style={{ borderBottom: "1px solid #222" }}>
                                 <td>x{item.quantity}</td>
-                                <td>{item.product_name}</td>
-                                <td>${Number(item.total).toLocaleString()}</td>
+                                <td>{item.product_name}</td> {/* ✅ CORREGIDO */}
+                                <td style={{ textAlign: "right", color: "#D4AF37" }}>
+                                  ${Number(item.total).toLocaleString()}
+                                </td>
                               </tr>
                             ))}
                           </tbody>
                         </table>
 
-                        <h3>TOTAL: ${Number(saleDetails.total).toLocaleString()}</h3>
+                        {/* RESUMEN */}
+                        <div style={{ marginTop: "20px", borderTop: "1px solid #333", paddingTop: "10px" }}>
+                          <strong style={{ color: "#fff" }}>TOTAL PAGADO: </strong>
+                          <span style={{ color: "#D4AF37", fontWeight: "bold" }}>
+                            ${Number(saleDetails?.total || 0).toLocaleString()}
+                          </span>
+                        </div>
 
-                        <button onClick={() => window.print()}>
-                          <FiPrinter /> IMPRIMIR COPIA
-                        </button>
+                        {/* BOTÓN IMPRIMIR */}
+                        <div style={{ marginTop: "20px" }}>
+                          <button
+                            onClick={() => window.print()}
+                            style={{
+                              padding: "10px",
+                              background: "transparent",
+                              border: "1px solid #666",
+                              color: "#ccc",
+                              borderRadius: "5px",
+                              cursor: "pointer",
+                              display: "flex",
+                              alignItems: "center",
+                              gap: "8px"
+                            }}
+                          >
+                            <FiPrinter /> IMPRIMIR COPIA
+                          </button>
+                        </div>
+
                       </div>
                     </td>
                   </tr>
