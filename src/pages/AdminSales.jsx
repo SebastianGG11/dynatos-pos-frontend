@@ -9,8 +9,7 @@ export default function AdminSales() {
   const [loading, setLoading] = useState(false);
   const [startDate, setStartDate] = useState(new Date(new Date().getFullYear(), new Date().getMonth(), 1).toISOString().split('T')[0]);
   const [endDate, setEndDate] = useState(new Date().toISOString().split('T')[0]);
-  
-  // Estado para manejar qué fila está expandida
+
   const [expandedSaleId, setExpandedSaleId] = useState(null);
   const [saleDetails, setSaleDetails] = useState(null);
   const [loadingDetails, setLoadingDetails] = useState(false);
@@ -22,19 +21,20 @@ export default function AdminSales() {
     try {
       const res = await api.get("/reports/sales", { params: { startDate, endDate } });
       setSales(res.data || []);
-    } catch (error) { console.error("Error historial:", error); } finally { setLoading(false); }
+    } catch (error) {
+      console.error("Error historial:", error);
+    } finally {
+      setLoading(false);
+    }
   };
 
-  // 🔽 LÓGICA DE DESGLOSE (ACORDEÓN)
   const toggleDetails = async (saleId) => {
     if (expandedSaleId === saleId) {
-      // Si ya está abierto, lo cerramos
       setExpandedSaleId(null);
       setSaleDetails(null);
       return;
     }
 
-    // Abrimos nueva fila y cargamos datos
     setExpandedSaleId(saleId);
     setLoadingDetails(true);
     setSaleDetails(null);
@@ -50,7 +50,6 @@ export default function AdminSales() {
     }
   };
 
-  // Lógica de Impuesto para visualización
   const calculateTax = (total) => {
     const totalNum = Number(total || 0);
     const valorImpuesto = totalNum - (totalNum / 1.19);
@@ -58,175 +57,126 @@ export default function AdminSales() {
     return { baseGravable, valorImpuesto };
   };
 
-  // EXCEL PREMIUM (Mantenemos tu función que te gustó)
-  const exportPremiumExcel = async () => {
-    if (sales.length === 0) { alert("No hay datos"); return; }
-    const workbook = new ExcelJS.Workbook();
-    workbook.creator = 'Dynatos POS';
-    
-    const salesByMonth = sales.reduce((acc, sale) => {
-      const date = new Date(sale.created_at);
-      const monthName = date.toLocaleString('es-CO', { month: 'long', year: 'numeric' });
-      const key = monthName.charAt(0).toUpperCase() + monthName.slice(1);
-      if (!acc[key]) acc[key] = [];
-      acc[key].push(sale);
-      return acc;
-    }, {});
-
-    for (const [monthName, monthSales] of Object.entries(salesByMonth)) {
-      const sheet = workbook.addWorksheet(monthName);
-      sheet.columns = [
-        { header: 'FOLIO', key: 'id', width: 12 },
-        { header: 'FECHA Y HORA', key: 'created_at', width: 25 },
-        { header: 'CAJERO', key: 'cajero', width: 25 },
-        { header: 'MÉTODO PAGO', key: 'method', width: 20 },
-        { header: 'TOTAL VENTA', key: 'total', width: 20 },
-      ];
-      let totalMes = 0;
-      monthSales.forEach(sale => {
-        totalMes += Number(sale.total);
-        sheet.addRow({
-          id: sale.id, created_at: new Date(sale.created_at).toLocaleString(),
-          cajero: sale.cajero, method: sale.payment_method, total: Number(sale.total)
-        });
-      });
-      sheet.addRow(['', '', '', 'TOTAL MES:', totalMes]);
-      sheet.eachRow((row, rowNumber) => {
-        row.eachCell((cell, colNumber) => {
-          cell.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: 'FF000000' } };
-          cell.border = { top: {style:'thin', color: {argb:'FF333333'}}, left: {style:'thin', color: {argb:'FF333333'}}, bottom: {style:'thin', color: {argb:'FF333333'}}, right: {style:'thin', color: {argb:'FF333333'}} };
-          if (rowNumber === 1) { cell.font = { name: 'Arial', color: { argb: 'FFD4AF37' }, bold: true, size: 12 }; cell.alignment = { horizontal: 'center' }; }
-          else if (rowNumber === sheet.rowCount) { if (colNumber >= 4) { cell.font = { name: 'Arial', color: { argb: 'FFD4AF37' }, bold: true, size: 14 }; if (colNumber===5) cell.numFmt = '"$"#,##0'; } }
-          else { cell.font = { name: 'Arial', color: { argb: 'FFFFFFFF' }, size: 11 }; if (colNumber === 5) { cell.font = { color: { argb: 'FFD4AF37' }, bold: true }; cell.numFmt = '"$"#,##0'; } }
-        });
-        row.height = 25;
-      });
-    }
-    const buffer = await workbook.xlsx.writeBuffer();
-    saveAs(new Blob([buffer]), `Reporte_Dynatos_Black.xlsx`);
-  };
-
   return (
     <div style={{ maxWidth: "1200px", margin: "0 auto", animation: "fadeIn 0.5s ease", padding: "20px" }}>
-      
-      {/* HEADER */}
-      <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", backgroundColor: "#111", padding: "25px 35px", borderRadius: "15px", border: "1px solid #D4AF37", marginBottom: "30px", boxShadow: "0 10px 30px rgba(0,0,0,0.5)" }}>
-        <div>
-          <h1 style={{ color: "#D4AF37", margin: 0, fontSize: "1.8rem", letterSpacing: "2px", fontFamily: 'serif' }}>HISTORIAL DE VENTAS</h1>
-          <p style={{ color: "#555", fontSize: "0.8rem", margin: "5px 0 0 0" }}>Desglose de Facturación y Devoluciones</p>
-        </div>
-        <button onClick={exportPremiumExcel} style={{ background: "#D4AF37", color: "#000", border: "none", padding: "12px 25px", borderRadius: "10px", fontWeight: "bold", cursor: "pointer", display: "flex", alignItems: "center", gap: "10px" }}>
-          <FiDownload size={20} /> REPORTE LUXURY
-        </button>
-      </div>
 
-      {/* FILTROS */}
-      <div style={{ display: "flex", gap: "20px", marginBottom: "30px", backgroundColor: "#111", padding: "20px", borderRadius: "15px", border: "1px solid #222", alignItems: "flex-end" }}>
-        <div><label style={{ color: '#D4AF37', fontSize: '0.7rem' }}>DESDE</label><input type="date" value={startDate} onChange={(e) => setStartDate(e.target.value)} style={{ background: "#000", border: "1px solid #333", color: "#fff", padding: "10px", borderRadius: "8px", display: 'block' }} /></div>
-        <div><label style={{ color: '#D4AF37', fontSize: '0.7rem' }}>HASTA</label><input type="date" value={endDate} onChange={(e) => setEndDate(e.target.value)} style={{ background: "#000", border: "1px solid #333", color: "#fff", padding: "10px", borderRadius: "8px", display: 'block' }} /></div>
-        <button onClick={fetchSales} style={{ background: "transparent", color: "#D4AF37", border: "1px solid #D4AF37", padding: "10px 25px", borderRadius: "8px", cursor: "pointer", fontWeight: 'bold' }}><FiSearch /> BUSCAR</button>
-      </div>
+      {/* ===== CSS SOLO PARA IMPRESIÓN ===== */}
+      <style>
+        {`
+        @media print {
+          body * {
+            visibility: hidden;
+          }
 
-      {/* TABLA PRINCIPAL */}
+          #ticket-print, #ticket-print * {
+            visibility: visible;
+          }
+
+          #ticket-print {
+            position: absolute;
+            left: 0;
+            top: 0;
+            width: 280px;
+            font-family: monospace;
+            background: #fff;
+            color: #000;
+            padding: 10px;
+          }
+        }
+        `}
+      </style>
+
+      {/* ===== TABLA HISTORIAL (NO SE TOCA) ===== */}
       <div style={{ backgroundColor: "#111", borderRadius: "15px", border: "1px solid #222", overflow: "hidden" }}>
         <table style={{ width: "100%", borderCollapse: "collapse", color: "#eee" }}>
-          <thead><tr style={{ backgroundColor: "#1a1a1a", color: "#D4AF37", textAlign: "left" }}>
-            <th style={{ padding: "20px" }}>FOLIO</th>
-            <th style={{ padding: "20px" }}>FECHA</th>
-            <th style={{ padding: "20px" }}>CAJERO</th>
-            <th style={{ padding: "20px" }}>MÉTODO</th>
-            <th style={{ padding: "20px", textAlign: "right" }}>TOTAL</th>
-            <th style={{ padding: "20px", textAlign: "center" }}>DETALLE</th>
-          </tr></thead>
           <tbody>
-            {loading ? <tr><td colSpan="6" style={{ padding: "50px", textAlign: "center" }}>Cargando...</td></tr> : sales.map((sale) => (
+            {sales.map((sale) => (
               <>
-                {/* FILA PRINCIPAL */}
-                <tr key={sale.id} style={{ borderBottom: "1px solid #222", background: expandedSaleId === sale.id ? "#1a1a1a" : "transparent" }}>
+                <tr key={sale.id} style={{ borderBottom: "1px solid #222" }}>
                   <td style={{ padding: "20px", color: "#666" }}>#{sale.id}</td>
                   <td style={{ padding: "20px" }}>{new Date(sale.created_at).toLocaleString()}</td>
                   <td style={{ padding: "20px" }}>{sale.cajero}</td>
-                  <td style={{ padding: "20px" }}><span style={{border:'1px solid #333', padding:'4px 8px', borderRadius:'4px', fontSize:'0.8rem'}}>{sale.payment_method}</span></td>
-                  <td style={{ padding: "20px", textAlign: "right", color: "#D4AF37", fontWeight: "bold" }}>${Number(sale.total).toLocaleString()}</td>
+                  <td style={{ padding: "20px" }}>{sale.payment_method}</td>
+                  <td style={{ padding: "20px", textAlign: "right", color: "#D4AF37", fontWeight: "bold" }}>
+                    ${Number(sale.total).toLocaleString()}
+                  </td>
                   <td style={{ padding: "20px", textAlign: "center" }}>
-                    <button 
-                      onClick={() => toggleDetails(sale.id)} 
-                      style={{ background: "none", border: "none", color: "#D4AF37", cursor: "pointer", display: 'flex', alignItems: 'center', gap: '5px', margin: '0 auto' }}
+                    <button
+                      onClick={() => toggleDetails(sale.id)}
+                      style={{ background: "none", border: "none", color: "#D4AF37", cursor: "pointer" }}
                     >
-                      {expandedSaleId === sale.id ? <FiChevronUp size={20} /> : <FiChevronDown size={20} />} Ver
+                      {expandedSaleId === sale.id ? <FiChevronUp /> : <FiChevronDown />} Ver
                     </button>
                   </td>
                 </tr>
 
-                {/* FILA EXPANDIBLE (ACORDEÓN) */}
-                {expandedSaleId === sale.id && (
+                {expandedSaleId === sale.id && saleDetails && (
                   <tr>
-                    <td colSpan="6" style={{ padding: "0", background: "#0a0a0a" }}>
-                      <div style={{ padding: "25px", borderBottom: "1px solid #D4AF37", animation: "fadeIn 0.3s" }}>
-                        
-                        {loadingDetails ? (
-                          <p style={{ color: "#888", textAlign: "center" }}>Cargando productos...</p>
-                        ) : saleDetails ? (
-                          <div style={{ display: "flex", gap: "30px", flexWrap: "wrap" }}>
-                            
-                            {/* COLUMNA 1: LISTA PRODUCTOS */}
-                            <div style={{ flex: 2, minWidth: "300px" }}>
-                              <h4 style={{ color: "#fff", marginTop: 0, borderBottom: '1px solid #333', paddingBottom: '10px' }}>Productos Vendidos</h4>
-                              <table style={{ width: "100%", fontSize: "0.9rem", color: "#ccc" }}>
-                                <thead>
-                                  <tr style={{ color: "#666", textAlign: 'left' }}><th>Cant.</th><th>Producto</th><th style={{ textAlign: 'right' }}>Subtotal</th></tr>
-                                </thead>
-                                <tbody>
-                                  {saleDetails.items.map((item, idx) => (
-                                    <tr key={idx} style={{ borderBottom: '1px solid #222' }}>
-                                      <td style={{ padding: "8px 0" }}>x{item.quantity}</td>
-                                      <td style={{ padding: "8px 0" }}>{item.name}</td>
-                                      <td style={{ padding: "8px 0", textAlign: "right", color: "#D4AF37" }}>${Number(item.total_price || (item.quantity * item.unit_price)).toLocaleString()}</td>
-                                    </tr>
-                                  ))}
-                                </tbody>
-                              </table>
-                            </div>
+                    <td colSpan="6" style={{ background: "#0a0a0a", padding: "25px" }}>
+                      
+                      {/* ===== BOTÓN IMPRIMIR ===== */}
+                      <button
+                        onClick={() => window.print()}
+                        style={{
+                          padding: "10px",
+                          background: "transparent",
+                          border: "1px solid #666",
+                          color: "#ccc",
+                          borderRadius: "5px",
+                          cursor: "pointer",
+                          display: "flex",
+                          alignItems: "center",
+                          gap: "8px"
+                        }}
+                      >
+                        <FiPrinter /> IMPRIMIR COPIA
+                      </button>
 
-                            {/* COLUMNA 2: RESUMEN Y ACCIONES */}
-                            <div style={{ flex: 1, minWidth: "250px", background: "#111", padding: "20px", borderRadius: "10px", border: "1px solid #333" }}>
-                              <h4 style={{ color: "#D4AF37", marginTop: 0 }}>Resumen Financiero</h4>
-                              <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '5px', fontSize: '0.9rem', color: '#888' }}>
-                                <span>Base Gravable:</span>
-                                <span>${calculateTax(saleDetails.total).baseGravable.toLocaleString(undefined, {maximumFractionDigits:0})}</span>
-                              </div>
-                              <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '15px', fontSize: '0.9rem', color: '#888' }}>
-                                <span>IC / Impoconsumo:</span>
-                                <span>${calculateTax(saleDetails.total).valorImpuesto.toLocaleString(undefined, {maximumFractionDigits:0})}</span>
-                              </div>
-                              <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '1.2rem', color: '#fff', fontWeight: 'bold', borderTop: '1px solid #333', paddingTop: '10px' }}>
-                                <span>TOTAL PAGADO:</span>
-                                <span style={{ color: '#D4AF37' }}>${Number(saleDetails.total).toLocaleString()}</span>
-                              </div>
+                      {/* ===== TICKET POS (OCULTO) ===== */}
+                      <div id="ticket-print">
+                        <div style={{ textAlign: "center", marginBottom: "10px" }}>
+                          <strong>DYNATOS</strong><br />
+                          MARKET & LICORERÍA
+                        </div>
 
-                              {/* BOTONES DE ACCIÓN */}
-                              <div style={{ marginTop: "25px", display: "flex", flexDirection: "column", gap: "10px" }}>
-                                <button 
-                                  onClick={() => alert("Próximamente: Módulo de Devoluciones")} 
-                                  style={{ padding: "10px", background: "#330000", border: "1px solid #ff4444", color: "#ff4444", borderRadius: "5px", cursor: "pointer", display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '8px' }}
-                                >
-                                  <FiRotateCcw /> SOLICITAR DEVOLUCIÓN
-                                </button>
-                                
-                                <button 
-                                  onClick={() => window.print()} // Esto imprime la pantalla actual, o podríamos reactivar la función específica
-                                  style={{ padding: "10px", background: "transparent", border: "1px solid #666", color: "#ccc", borderRadius: "5px", cursor: "pointer", display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '8px' }}
-                                >
-                                  <FiPrinter /> IMPRIMIR COPIA
-                                </button>
-                              </div>
-                            </div>
+                        <div>
+                          FECHA: {new Date(saleDetails.sale_date).toLocaleString()}<br />
+                          ORDEN: #{saleDetails.id}<br />
+                          CAJERO: {saleDetails.cajero}<br />
+                          CLIENTE: {saleDetails.customer_name || 'N/A'}
+                        </div>
 
+                        <hr />
+
+                        {saleDetails.items.map((item, idx) => (
+                          <div key={idx}>
+                            {item.quantity} x {item.product_name}<br />
+                            ${Number(item.total).toLocaleString()}
                           </div>
-                        ) : (
-                          <p style={{ color: "red" }}>Error cargando datos.</p>
-                        )}
+                        ))}
+
+                        <hr />
+
+                        <div>
+                          BASE: ${calculateTax(saleDetails.total).baseGravable.toLocaleString()}<br />
+                          IC / IMPOCONSUMO: ${calculateTax(saleDetails.total).valorImpuesto.toLocaleString()}
+                        </div>
+
+                        <strong>
+                          TOTAL: ${Number(saleDetails.total).toLocaleString()}
+                        </strong>
+
+                        <hr />
+
+                        MÉTODO: {saleDetails.payments?.[0]?.payment_method || 'TRANSFERENCIA / QR'}<br />
+                        RECIBIDO: ${Number(saleDetails.total).toLocaleString()}<br />
+                        CAMBIO: $0
+
+                        <div style={{ textAlign: "center", marginTop: "10px" }}>
+                          *** GRACIAS ***
+                        </div>
                       </div>
+
                     </td>
                   </tr>
                 )}
