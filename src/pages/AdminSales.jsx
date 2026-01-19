@@ -1,6 +1,6 @@
 import { useState, useEffect } from "react";
 import api from "../api/api";
-import { FiSearch, FiDownload, FiChevronDown, FiChevronUp, FiRotateCcw, FiPrinter } from "react-icons/fi";
+import { FiSearch, FiDownload, FiChevronDown, FiChevronUp, FiRotateCcw } from "react-icons/fi"; // Quité FiPrinter
 import ExcelJS from "exceljs";
 import { saveAs } from "file-saver";
 
@@ -14,9 +14,6 @@ export default function AdminSales() {
   const [expandedSaleId, setExpandedSaleId] = useState(null);
   const [saleDetails, setSaleDetails] = useState(null);
   const [loadingDetails, setLoadingDetails] = useState(false);
-
-  // 🖨️ NUEVO: Estado para guardar temporalmente la factura que vamos a imprimir
-  const [printData, setPrintData] = useState(null);
 
   useEffect(() => { fetchSales(); }, [startDate, endDate]);
 
@@ -49,17 +46,6 @@ export default function AdminSales() {
     }
   };
 
-  // 🖨️ NUEVO: Función que prepara la impresión limpia
-  const handlePrintCopy = (details) => {
-    setPrintData(details); // 1. Cargamos los datos en la "plantilla oculta"
-    
-    // 2. Esperamos un instante a que React renderice la plantilla y lanzamos print
-    setTimeout(() => {
-      window.print();
-      setPrintData(null); // 3. Limpiamos al terminar
-    }, 500);
-  };
-
   const calculateTax = (total) => {
     const totalNum = Number(total || 0);
     const valorImpuesto = totalNum - (totalNum / 1.19);
@@ -67,7 +53,7 @@ export default function AdminSales() {
     return { baseGravable, valorImpuesto };
   };
 
-  // EXCEL PREMIUM (Tu función original intacta)
+  // EXCEL PREMIUM
   const exportPremiumExcel = async () => {
     if (sales.length === 0) { alert("No hay datos"); return; }
     const workbook = new ExcelJS.Workbook();
@@ -118,50 +104,6 @@ export default function AdminSales() {
   return (
     <div style={{ maxWidth: "1200px", margin: "0 auto", animation: "fadeIn 0.5s ease", padding: "20px" }}>
       
-      {/* 🧾 PLANTILLA DE IMPRESIÓN (OCULTA HASTA QUE SE IMPRIME) */}
-      <div id="print-area" style={{ display: "none" }}>
-        {printData && (
-          <div style={{ width: "80mm", padding: "5mm", color: "#000", fontFamily: 'monospace', backgroundColor: '#fff', fontSize: '12px' }}>
-            <center>
-              <h2 style={{ margin: 0 }}>DYNATOS</h2>
-              <p style={{ margin: 0 }}>MARKET & LICORERÍA</p>
-              <p style={{ margin: '5px 0', fontSize: '10px' }}>*** COPIA DE RECIBO ***</p>
-            </center>
-            <hr style={{ border: '0.5px dashed #000' }} />
-            <p style={{ margin: 0 }}>ORDEN: #{printData.id}</p>
-            <p style={{ margin: 0 }}>FECHA: {new Date(printData.created_at).toLocaleString()}</p>
-            <p style={{ margin: 0 }}>CAJERO: {printData.cajero || 'General'}</p>
-            <hr style={{ border: '0.5px dashed #000' }} />
-            <table style={{ width: '100%' }}>
-              <tbody>
-                {printData.items.map((item, idx) => (
-                  <tr key={idx}>
-                    <td>{item.quantity} x {item.name || "Producto"}</td>
-                    <td align="right">${Number(item.total_price || (item.quantity * item.unit_price)).toLocaleString()}</td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
-            <hr style={{ border: '0.5px dashed #000' }} />
-            <div style={{ textAlign: 'right' }}>
-               <p style={{ margin: 0 }}>BASE: ${calculateTax(printData.total).baseGravable.toLocaleString(undefined, {maximumFractionDigits:0})}</p>
-               <p style={{ margin: 0 }}>IC: ${calculateTax(printData.total).valorImpuesto.toLocaleString(undefined, {maximumFractionDigits:0})}</p>
-               <h3 style={{ margin: '5px 0' }}>TOTAL: ${Number(printData.total).toLocaleString()}</h3>
-            </div>
-            <center style={{ marginTop: '20px' }}>-- COPIA ADMINISTRATIVA --</center>
-          </div>
-        )}
-      </div>
-
-      {/* ESTILOS PARA QUE AL IMPRIMIR SOLO SALGA EL RECIBO */}
-      <style>{`
-        @media print {
-          body * { visibility: hidden; }
-          #print-area, #print-area * { visibility: visible; }
-          #print-area { position: absolute; left: 0; top: 0; width: 100%; }
-        }
-      `}</style>
-
       {/* HEADER */}
       <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", backgroundColor: "#111", padding: "25px 35px", borderRadius: "15px", border: "1px solid #D4AF37", marginBottom: "30px", boxShadow: "0 10px 30px rgba(0,0,0,0.5)" }}>
         <div>
@@ -233,10 +175,7 @@ export default function AdminSales() {
                                   {saleDetails.items.map((item, idx) => (
                                     <tr key={idx} style={{ borderBottom: '1px solid #222' }}>
                                       <td style={{ padding: "8px 0" }}>x{item.quantity}</td>
-                                      
-                                      {/* ✅ CORRECCIÓN 1: Aseguramos que si 'name' viene vacío, muestre algo */}
                                       <td style={{ padding: "8px 0", color: "#eee" }}>{item.name || item.product_name || "Producto sin nombre"}</td>
-                                      
                                       <td style={{ padding: "8px 0", textAlign: "right", color: "#D4AF37" }}>${Number(item.total_price || (item.quantity * item.unit_price)).toLocaleString()}</td>
                                     </tr>
                                   ))}
@@ -260,25 +199,16 @@ export default function AdminSales() {
                                 <span style={{ color: '#D4AF37' }}>${Number(saleDetails.total).toLocaleString()}</span>
                               </div>
 
-                              {/* BOTONES DE ACCIÓN */}
-                              <div style={{ marginTop: "25px", display: "flex", flexDirection: "column", gap: "10px" }}>
+                              {/* BOTÓN DE DEVOLUCIÓN */}
+                              <div style={{ marginTop: "25px" }}>
                                 <button 
                                   onClick={() => alert("Próximamente: Módulo de Devoluciones")} 
-                                  style={{ padding: "10px", background: "#330000", border: "1px solid #ff4444", color: "#ff4444", borderRadius: "5px", cursor: "pointer", display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '8px' }}
+                                  style={{ width: '100%', padding: "12px", background: "#330000", border: "1px solid #ff4444", color: "#ff4444", borderRadius: "5px", cursor: "pointer", display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '8px', fontWeight: 'bold' }}
                                 >
                                   <FiRotateCcw /> SOLICITAR DEVOLUCIÓN
                                 </button>
-                                
-                                {/* ✅ CORRECCIÓN 2: Este botón ahora llama a la función de impresión limpia */}
-                                <button 
-                                  onClick={() => handlePrintCopy(saleDetails)} 
-                                  style={{ padding: "10px", background: "transparent", border: "1px solid #666", color: "#ccc", borderRadius: "5px", cursor: "pointer", display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '8px' }}
-                                >
-                                  <FiPrinter /> IMPRIMIR COPIA
-                                </button>
                               </div>
                             </div>
-
                           </div>
                         ) : (
                           <p style={{ color: "red" }}>Error cargando datos.</p>
