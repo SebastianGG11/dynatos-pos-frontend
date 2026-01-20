@@ -1,8 +1,8 @@
 import React from 'react';
 import { Link, useLocation, useNavigate } from 'react-router-dom';
-// 👇 AGREGUÉ FiAlertTriangle PARA EL ICONO DE DEVOLUCIONES
+// 👇 AGREGUÉ FiPieChart
 import { 
-  FiHome, FiPackage, FiTag, FiUsers, FiShoppingBag, FiLogOut, FiTruck, FiAlertTriangle 
+  FiHome, FiPackage, FiTag, FiUsers, FiShoppingBag, FiLogOut, FiTruck, FiAlertTriangle, FiPieChart 
 } from 'react-icons/fi';
 
 const AdminSidebar = () => {
@@ -21,8 +21,9 @@ const AdminSidebar = () => {
     { path: '/admin/promociones', icon: <FiTag />, label: 'Promociones' },
     { path: '/admin/usuarios', icon: <FiUsers />, label: 'Cajeros' },
     { path: '/admin/ventas', icon: <FiShoppingBag />, label: 'Ventas' },
-    // 👇 AQUÍ ESTÁ EL NUEVO BOTÓN
     { path: '/admin/returns', icon: <FiAlertTriangle />, label: 'Devoluciones' },
+    // 👇 NUEVO BOTÓN PARA LA JEFA
+    { path: '/admin/financials', icon: <FiPieChart />, label: 'Finanzas' },
   ];
 
   return (
