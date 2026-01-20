@@ -24,7 +24,7 @@ const AdminSidebar = () => {
     { path: '/admin/returns', icon: <FiAlertTriangle />, label: 'Devoluciones' },
     
     // 👇 NUEVO BOTÓN PARA MERMAS (BOTELLAS ROTAS)
-    { path: '/admin/adjustments', icon: <FiClipboard />, label: 'Mermas' },
+    { path: '/admin/adjustments', icon: <FiClipboard />, label: 'Pérdidas' },
 
     { path: '/admin/expenses', icon: <FiMinusCircle />, label: 'Gastos' },
     { path: '/admin/financials', icon: <FiPieChart />, label: 'Finanzas' },
