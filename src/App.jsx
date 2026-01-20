@@ -16,7 +16,7 @@ import AdminPromotions from "./pages/AdminPromotions.jsx";
 import AdminPurchases from "./pages/AdminPurchases.jsx";
 import AdminReturns from "./pages/AdminReturns.jsx"; 
 import AdminFinancials from "./pages/AdminFinancials.jsx"; // 👈 1. NUEVA IMPORTACIÓN
-
+import AdminExpenses from "./pages/AdminExpenses.jsx";
 function getUserSafe() {
   try {
     return JSON.parse(localStorage.getItem("user") || "null");
@@ -101,7 +101,7 @@ export default function App() {
           <Route path="ventas" element={<AdminSales />} />
           <Route path="returns" element={<AdminReturns />} />
           <Route path="financials" element={<AdminFinancials />} /> {/* 👈 2. NUEVA RUTA */}
-          
+          <Route path="expenses" element={<AdminExpenses />} />
           <Route path="dashboard" element={<Dashboard />} />
         </Route>
 
