@@ -1,8 +1,8 @@
 import React from 'react';
 import { Link, useLocation, useNavigate } from 'react-router-dom';
-// 👇 AGREGUÉ FiPieChart
+// 👇 AGREGUÉ FiClipboard para Mermas
 import { 
-  FiHome, FiPackage, FiTag, FiUsers, FiShoppingBag, FiLogOut, FiTruck, FiAlertTriangle, FiPieChart 
+  FiHome, FiPackage, FiTag, FiUsers, FiShoppingBag, FiLogOut, FiTruck, FiAlertTriangle, FiPieChart, FiMinusCircle, FiClipboard 
 } from 'react-icons/fi';
 
 const AdminSidebar = () => {
@@ -22,7 +22,11 @@ const AdminSidebar = () => {
     { path: '/admin/usuarios', icon: <FiUsers />, label: 'Cajeros' },
     { path: '/admin/ventas', icon: <FiShoppingBag />, label: 'Ventas' },
     { path: '/admin/returns', icon: <FiAlertTriangle />, label: 'Devoluciones' },
-    // 👇 NUEVO BOTÓN PARA LA JEFA
+    
+    // 👇 NUEVO BOTÓN PARA MERMAS (BOTELLAS ROTAS)
+    { path: '/admin/adjustments', icon: <FiClipboard />, label: 'Mermas' },
+
+    { path: '/admin/expenses', icon: <FiMinusCircle />, label: 'Gastos' },
     { path: '/admin/financials', icon: <FiPieChart />, label: 'Finanzas' },
   ];
 

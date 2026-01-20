@@ -15,8 +15,10 @@ import AdminSales from "./pages/AdminSales.jsx";
 import AdminPromotions from "./pages/AdminPromotions.jsx";
 import AdminPurchases from "./pages/AdminPurchases.jsx";
 import AdminReturns from "./pages/AdminReturns.jsx"; 
-import AdminFinancials from "./pages/AdminFinancials.jsx"; // 👈 1. NUEVA IMPORTACIÓN
+import AdminFinancials from "./pages/AdminFinancials.jsx"; 
 import AdminExpenses from "./pages/AdminExpenses.jsx";
+import AdminAdjustments from "./pages/AdminAdjustments.jsx"; // 👈 1. NUEVA IMPORTACIÓN (MERMAS)
+
 function getUserSafe() {
   try {
     return JSON.parse(localStorage.getItem("user") || "null");
@@ -100,8 +102,13 @@ export default function App() {
           <Route path="usuarios" element={<AdminUsers />} />
           <Route path="ventas" element={<AdminSales />} />
           <Route path="returns" element={<AdminReturns />} />
-          <Route path="financials" element={<AdminFinancials />} /> {/* 👈 2. NUEVA RUTA */}
+          
+          {/* 👇 2. AQUÍ ESTÁ LA NUEVA RUTA DE MERMAS */}
+          <Route path="adjustments" element={<AdminAdjustments />} />
+          
           <Route path="expenses" element={<AdminExpenses />} />
+          <Route path="financials" element={<AdminFinancials />} />
+          
           <Route path="dashboard" element={<Dashboard />} />
         </Route>
 
