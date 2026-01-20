@@ -1,12 +1,11 @@
 import { useState, useEffect } from "react";
 import api from "../api/api";
-import { FiAlertTriangle, FiSearch, FiSave, FiTrash2 } from "react-icons/fi";
+import { FiAlertTriangle, FiSearch, FiSave } from "react-icons/fi";
 
 export default function AdminAdjustments() {
   const [adjustments, setAdjustments] = useState([]);
-  const [loading, setLoading] = useState(false);
   
-  // 🔥 CORRECCIÓN 1: Inicializar siempre como array vacío
+  // Inicializamos siempre como array vacío
   const [products, setProducts] = useState([]); 
   
   // Formulario
@@ -23,32 +22,40 @@ export default function AdminAdjustments() {
   const fetchAdjustments = async () => {
     try {
       const res = await api.get("/adjustments");
-      // Protección: Si no es array, poner vacío
       setAdjustments(Array.isArray(res.data) ? res.data : []);
     } catch (error) { console.error("Error historial:", error); }
   };
 
+  // 🔥 AQUÍ ESTABA EL PROBLEMA: Ahora pedimos 1000 productos
   const fetchProducts = async () => {
     try {
-      const res = await api.get("/products"); 
-      // 🔥 CORRECCIÓN 2: Detectar si el backend devuelve array directo o un objeto con paginación
+      // Agregamos ?limit=1000 para traer todo el inventario de una vez
+      const res = await api.get("/products?limit=1000"); 
+      
+      console.log("📦 Debug Productos:", res.data); // Mira la consola (F12) si falla
+
+      let listaProductos = [];
+
+      // Lógica "Todo Terreno" para encontrar dónde está la lista
       if (Array.isArray(res.data)) {
-        setProducts(res.data);
-      } else if (res.data && Array.isArray(res.data.products)) {
-        setProducts(res.data.products); // Caso común si hay paginación
-      } else if (res.data && Array.isArray(res.data.data)) {
-        setProducts(res.data.data); // Otro formato común
+        listaProductos = res.data;
+      } else if (res.data?.data && Array.isArray(res.data.data)) {
+        listaProductos = res.data.data; // Formato paginado estándar
+      } else if (res.data?.products && Array.isArray(res.data.products)) {
+        listaProductos = res.data.products;
       } else {
-        setProducts([]); // Evitar crash si no entiende el formato
-        console.warn("Formato de productos desconocido:", res.data);
+        console.warn("No encontré la lista de productos en la respuesta");
       }
+
+      setProducts(listaProductos);
+
     } catch (error) { 
       console.error("Error cargando productos", error);
       setProducts([]); 
     }
   };
 
-  // 🔥 CORRECCIÓN 3: Filtrado seguro (Evita pantalla negra)
+  // Filtro seguro
   const filteredProducts = Array.isArray(products) 
     ? products.filter(p => p.name && p.name.toLowerCase().includes(search.toLowerCase()))
     : [];
@@ -88,7 +95,6 @@ export default function AdminAdjustments() {
         </div>
       </div>
 
-      {/* CONTENEDOR GRID */}
       <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(300px, 1fr))", gap: "30px" }}>
         
         {/* COLUMNA IZQUIERDA: FORMULARIO */}
@@ -108,7 +114,7 @@ export default function AdminAdjustments() {
               />
             </div>
             
-            {/* Lista desplegable de sugerencias */}
+            {/* Lista desplegable */}
             {search.length > 0 && !selectedProduct && (
               <div style={{ 
                 position: "absolute", 
