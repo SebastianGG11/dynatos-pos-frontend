@@ -94,7 +94,11 @@ export default function Venta({ cashDrawer, onCashClosed }) {
     }
 
     setReceiptData({
-      id: sale.id, date: new Date().toLocaleString(), cajero: usuarioActual,
+      id: sale.id, 
+      // CAMBIO IMPORTANTE: Guardamos el número de venta formateado (FV...)
+      sale_number: sale.sale_number, 
+      date: new Date().toLocaleString(), 
+      cajero: usuarioActual,
       items: [...cart], subtotal: baseGravable, impuesto: valorImpuesto, total: total,
       method, received, change, customerName: finalCustomerName, customerDoc: finalCustomerDoc
     });
@@ -142,7 +146,8 @@ export default function Venta({ cashDrawer, onCashClosed }) {
             </center>
             <div style={{ marginTop: '10px' }}>
               <p style={{ margin: 0 }}>FECHA: {receiptData.date}</p>
-              <p style={{ margin: 0 }}>ORDEN: #{receiptData.id}</p>
+              {/* CAMBIO AQUÍ: Mostrar sale_number o id sin el # duplicado */}
+              <p style={{ margin: 0 }}>FACTURA: {receiptData.sale_number || receiptData.id}</p>
               <p style={{ margin: 0 }}>CAJERO: {String(receiptData.cajero).toUpperCase()}</p>
               <p style={{ margin: '5px 0 0 0', fontWeight: 'bold' }}>CLIENTE: {receiptData.customerName}</p>
               {receiptData.customerDoc && <p style={{ margin: 0 }}>NIT/CC: {receiptData.customerDoc}</p>}
