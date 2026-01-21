@@ -141,10 +141,7 @@ export default function AdminExpenses() {
               </div>
             </div>
 
-            <div style={{ marginBottom: "20px", background: "#331100", padding: "10px", borderRadius: "5px", border: "1px solid #552200", display: "flex", alignItems: "center", gap: "10px" }}>
-              <input type="checkbox" id="chkDeduct" checked={form.deduct_from_drawer} onChange={e => setForm({...form, deduct_from_drawer: e.target.checked})} style={{ transform: "scale(1.2)" }} />
-              <label htmlFor="chkDeduct" style={{ color: "#ffaa80", fontSize: "0.9rem", cursor: "pointer" }}>¿Sacar dinero de la Caja actual?</label>
-            </div>
+            {/* SECCIÓN ELIMINADA: Checkbox de sacar dinero de caja */}
 
             <div style={{ display: "flex", gap: "10px" }}>
               <button type="button" onClick={() => setShowModal(false)} style={{ flex: 1, padding: "10px", background: "transparent", border: "1px solid #555", color: "#ccc", borderRadius: "5px", cursor: "pointer" }}>Cancelar</button>
