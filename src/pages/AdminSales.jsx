@@ -109,7 +109,8 @@ export default function AdminSales() {
     for (const [monthName, monthSales] of Object.entries(salesByMonth)) {
       const sheet = workbook.addWorksheet(monthName);
       sheet.columns = [
-        { header: 'FOLIO', key: 'id', width: 10 },
+        // CAMBIO AQUÍ: Header cambiado a FACTURA
+        { header: 'FACTURA', key: 'sale_number', width: 15 },
         { header: 'FECHA', key: 'created_at', width: 20 },
         { header: 'CAJERO', key: 'cajero', width: 20 },
         { header: 'MÉTODO', key: 'method', width: 15 },
@@ -126,10 +127,12 @@ export default function AdminSales() {
         granTotal += final;
 
         sheet.addRow({
-          id: sale.id, created_at: new Date(sale.created_at).toLocaleString(),
+          // CAMBIO AQUÍ: Usamos sale.sale_number en lugar de sale.id
+          sale_number: sale.sale_number || `Ref-${sale.id}`, 
+          created_at: new Date(sale.created_at).toLocaleString(),
           cajero: sale.cajero, method: sale.payment_method,
           original: original,
-          returned: returned > 0 ? -returned : 0, // En negativo para Excel
+          returned: returned > 0 ? -returned : 0, 
           total: final
         });
       });
@@ -147,9 +150,7 @@ export default function AdminSales() {
              cell.alignment = { horizontal: 'center' };
           } else {
              cell.font = { name: 'Arial', color: { argb: 'FFFFFFFF' }, size: 11 };
-             // Columna de Devoluciones en ROJO
              if(colNumber === 6 && cell.value !== 0) cell.font = { color: { argb: 'FFFF4444' }, bold: true };
-             // Columna Total en DORADO
              if(colNumber === 7) { cell.font = { color: { argb: 'FFD4AF37' }, bold: true }; cell.numFmt = '"$"#,##0'; }
              if(colNumber >= 5 && colNumber <= 6) cell.numFmt = '"$"#,##0';
           }
@@ -186,7 +187,8 @@ export default function AdminSales() {
       <div style={{ backgroundColor: "#111", borderRadius: "15px", border: "1px solid #222", overflow: "hidden" }}>
         <table style={{ width: "100%", borderCollapse: "collapse", color: "#eee" }}>
           <thead><tr style={{ backgroundColor: "#1a1a1a", color: "#D4AF37", textAlign: "left" }}>
-            <th style={{ padding: "20px" }}>FOLIO</th>
+            {/* CAMBIO AQUÍ: FOLIO -> FACTURA */}
+            <th style={{ padding: "20px" }}>FACTURA</th>
             <th style={{ padding: "20px" }}>FECHA</th>
             <th style={{ padding: "20px" }}>CAJERO</th>
             <th style={{ padding: "20px" }}>MÉTODO</th>
@@ -203,7 +205,9 @@ export default function AdminSales() {
               return (
                 <>
                   <tr key={sale.id} style={{ borderBottom: "1px solid #222", background: expandedSaleId === sale.id ? "#1a1a1a" : "transparent" }}>
-                    <td style={{ padding: "20px", color: "#666" }}>#{sale.id}</td>
+                    {/* CAMBIO AQUÍ: Eliminado el '#' y cambiado sale.id por sale.sale_number */}
+                    <td style={{ padding: "20px", color: "#666" }}>{sale.sale_number || sale.id}</td>
+                    
                     <td style={{ padding: "20px" }}>{new Date(sale.created_at).toLocaleString()}</td>
                     <td style={{ padding: "20px" }}>{sale.cajero}</td>
                     <td style={{ padding: "20px" }}><span style={{border:'1px solid #333', padding:'4px 8px', borderRadius:'4px', fontSize:'0.8rem'}}>{sale.payment_method}</span></td>
