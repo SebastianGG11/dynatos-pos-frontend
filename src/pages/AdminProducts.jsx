@@ -1,26 +1,25 @@
 import { useEffect, useState, useRef } from "react";
-import api from "../api/api"; // Asegúrate de que esto apunte a tu configuración de axios
-import { FiPlus, FiEdit, FiTrash2, FiSearch, FiX, FiBarcode, FiImage } from "react-icons/fi";
+import api from "../api/api"; 
+// CORRECCIÓN AQUÍ ABAJO:
+import { FiPlus, FiEdit, FiTrash2, FiSearch, FiX, FiImage } from "react-icons/fi";
+import { FaBarcode } from "react-icons/fa"; 
 
 export default function AdminProducts() {
   const [products, setProducts] = useState([]);
   const [loading, setLoading] = useState(false);
   const [searchTerm, setSearchTerm] = useState("");
   
-  // Estado para el Modal
   const [showModal, setShowModal] = useState(false);
   const [isEditing, setIsEditing] = useState(false);
   const [previewImage, setPreviewImage] = useState(null);
 
-  // Referencia para el input de barcode (para auto-focus)
   const barcodeInputRef = useRef(null);
 
-  // Estado del Formulario
   const [formData, setFormData] = useState({
     id: null,
     name: "",
     sku: "",
-    barcode: "", // ✅ Campo Barcode
+    barcode: "",
     description: "",
     category_id: "",
     sale_price: "",
@@ -39,7 +38,6 @@ export default function AdminProducts() {
     loadCategories();
   }, []);
 
-  // Enfocar el input de barcode cuando se abre el modal
   useEffect(() => {
     if (showModal && barcodeInputRef.current) {
       setTimeout(() => {
@@ -69,14 +67,12 @@ export default function AdminProducts() {
     }
   };
 
-  // Buscador en tiempo real
   const handleSearch = async (val) => {
     setSearchTerm(val);
     if (val.trim().length === 0) {
       loadProducts();
       return;
     }
-    // Si escribe más de 2 caracteres o escanea algo largo
     if (val.length > 2) {
       try {
         const res = await api.get(`/products/search?q=${val}`);
@@ -124,7 +120,6 @@ export default function AdminProducts() {
       is_active: prod.is_active === 1,
       image: null
     });
-    // Si tienes URL completa para imágenes, ajústalo aquí
     setPreviewImage(prod.image_filename ? `http://localhost:4000/uploads/${prod.image_filename}` : null);
     setIsEditing(true);
     setShowModal(true);
@@ -141,7 +136,6 @@ export default function AdminProducts() {
   const handleSubmit = async (e) => {
     e.preventDefault();
     
-    // Usamos FormData para poder enviar archivos (imagen)
     const data = new FormData();
     data.append("name", formData.name);
     data.append("sale_price", formData.sale_price);
@@ -263,16 +257,17 @@ export default function AdminProducts() {
 
             <form onSubmit={handleSubmit} style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "20px" }}>
               
-              {/* ✅ CAMPO BARCODE / ESCÁNER */}
+              {/* CAMPO BARCODE / ESCÁNER CORREGIDO */}
               <div style={{ gridColumn: "1 / -1", background: "#1a1a1a", padding: "15px", borderRadius: "8px", border: "1px dashed #444" }}>
                 <label style={{ color: "#D4AF37", display: "block", marginBottom: "8px", fontWeight: "bold" }}>
-                  <FiBarcode style={{ marginRight: "5px", verticalAlign: "bottom" }} /> 
+                  {/* CORRECCIÓN AQUÍ: FaBarcode en vez de FiBarcode */}
+                  <FaBarcode style={{ marginRight: "5px", verticalAlign: "bottom" }} /> 
                   CÓDIGO DE BARRAS (Escáner aquí)
                 </label>
                 <input 
                   type="text" 
                   name="barcode"
-                  ref={barcodeInputRef} // 👈 REFERENCIA PARA AUTO-FOCUS
+                  ref={barcodeInputRef}
                   value={formData.barcode}
                   onChange={(e) => setFormData({ ...formData, barcode: e.target.value })}
                   placeholder="Escanea el producto o escribe manual..." 
