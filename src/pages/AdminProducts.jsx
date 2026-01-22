@@ -126,7 +126,7 @@ export default function AdminProducts() {
       {/* SECCIÓN DE TÍTULO */}
       <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-end", marginBottom: "40px" }}>
         <div>
-          <h1 style={{ color: "#D4AF37", margin: 0, fontSize: "2.2rem", fontWeight: "800" }}>CATÁLOGO</h1>
+          <h1 style={{ color: "#D4AF37", margin: 0, fontSize: "2.2rem", fontWeight: "800" }}>PRODUCTOS</h1>
           <p style={{ color: "#555", marginTop: "5px" }}>Control total de existencias y márgenes comerciales</p>
         </div>
         <button onClick={handleOpenCreate} style={{ display: "flex", alignItems: "center", gap: "10px", padding: "14px 30px", background: "#D4AF37", border: "none", borderRadius: "12px", fontWeight: "bold", cursor: "pointer", color: "#000", boxShadow: "0 4px 15px rgba(212, 175, 55, 0.2)" }}>
