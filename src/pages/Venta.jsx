@@ -216,34 +216,45 @@ export default function Venta({ cashDrawer, onCashClosed }) {
   const valorImpuesto = total - total / 1.19;
   const baseGravable = total - valorImpuesto;
 
-  const finalizeTransaction = (method, received, change) => {
-    let finalCustomerName = "CLIENTE GENERAL";
-    let finalCustomerDoc = "";
+  const finalizeTransaction = async (method, received, change) => {
+  let finalCustomerName = "CLIENTE GENERAL";
+  let finalCustomerDoc = "";
 
-    if (isCustomClient && clientName.trim()) {
-      finalCustomerName = clientName.trim();
-      finalCustomerDoc = clientDoc.trim();
-    }
+  if (isCustomClient && clientName.trim()) {
+    finalCustomerName = clientName.trim();
+    finalCustomerDoc = clientDoc.trim();
+  }
 
-    setReceiptData({
-      id: sale.id,
-      sale_number: sale.sale_number,
-      date: new Date().toLocaleString(),
-      cajero: usuarioActual,
-      items: [...cart],
-      subtotal: baseGravable,
-      impuesto: valorImpuesto,
-      total: total,
-      method,
-      received,
-      change,
-      customerName: finalCustomerName,
-      customerDoc: finalCustomerDoc
-    });
-
-    window.electronAPI.printTicket(data)
-
+  const ticket = {
+    id: sale.id,
+    sale_number: sale.sale_number,
+    date: new Date().toLocaleString(),
+    cajero: usuarioActual,
+    items: cart.map(i => ({
+      name: i.name,
+      qty: i.qty,
+      sale_price: i.sale_price
+    })),
+    subtotal: baseGravable,
+    impuesto: valorImpuesto,
+    total: total,
+    method,
+    received,
+    change,
+    customerName: finalCustomerName,
+    customerDoc: finalCustomerDoc
   };
+
+  try {
+    await window.electronAPI.printTicket(ticket);
+  } catch (err) {
+    console.error("Error imprimiendo:", err);
+  }
+
+  clearCart();
+  loadAll();
+};
+
 
   const createSale = async () => {
     try {
