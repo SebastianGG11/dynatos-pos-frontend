@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import api from "../api/api";
 import CerrarCaja from "./CerrarCaja";
 import {
@@ -30,6 +30,92 @@ export default function Venta({ cashDrawer, onCashClosed }) {
 
   // 1. LÓGICA DE NOMBRE SIMPLIFICADA (DIRECTO DEL LOGIN)
   const [usuarioActual, setUsuarioActual] = useState("Cajero");
+
+  // ===========================
+  // 🔥 LECTOR CÓDIGO DE BARRAS
+  // ===========================
+  const scanBufferRef = useRef("");
+  const lastKeyTimeRef = useRef(0);
+
+  const isEditableElement = () => {
+    const el = document.activeElement;
+    if (!el) return false;
+    const tag = (el.tagName || "").toLowerCase();
+    return tag === "input" || tag === "textarea" || el.isContentEditable;
+  };
+
+  const handleBarcodeScan = (codeRaw) => {
+    const code = String(codeRaw || "").trim();
+    if (!code) return;
+
+    // Busca por barcode exacto (tu DB ya tiene columna barcode)
+    const found =
+      products.find((p) => String(p.barcode || "").trim() === code) ||
+      products.find((p) => String(p.sku || "").trim() === code);
+
+    if (found) {
+      addProduct(found);
+    } else {
+      // No lo freno con alert porque puede ser molesto en caja,
+      // pero lo dejo visible en consola por ahora:
+      console.log("🔎 Código no encontrado:", code);
+    }
+  };
+
+  useEffect(() => {
+    const onKeyDown = (e) => {
+      // Teclas que no aportan al código
+      if (e.key === "Shift" || e.key === "Alt" || e.key === "Control" || e.key === "Meta") return;
+
+      const now = Date.now();
+      const delta = now - (lastKeyTimeRef.current || 0);
+      lastKeyTimeRef.current = now;
+
+      // Si el usuario está escribiendo normal en un input (tecleo lento), no interceptar
+      const typingHuman = isEditableElement() && delta > 80;
+
+      // ENTER: fin de escaneo
+      if (e.key === "Enter") {
+        const candidate = scanBufferRef.current;
+        scanBufferRef.current = "";
+
+        // Si venía de un escaneo (rápido) o el buffer está largo, procesar
+        if (candidate && candidate.length >= 4) {
+          // Evita que "Enter" haga submit o active botones
+          e.preventDefault();
+          handleBarcodeScan(candidate);
+        }
+        return;
+      }
+
+      // Solo caracteres típicos de barcode (muchos escáneres mandan letras/números y a veces - _)
+      const isChar = /^[a-zA-Z0-9\-_]$/.test(e.key);
+      if (!isChar) {
+        // Si cae una tecla rara, cortamos buffer para no contaminar
+        if (!typingHuman) scanBufferRef.current = "";
+        return;
+      }
+
+      // Si es tecleo humano en input y lento, ignorar
+      if (typingHuman) return;
+
+      // Heurística: los escáneres meten teclas MUY rápido (delta pequeño)
+      // Si pasan "lentas", reiniciamos buffer para no mezclar
+      if (delta > 120) {
+        scanBufferRef.current = e.key;
+      } else {
+        scanBufferRef.current += e.key;
+      }
+
+      // Si estamos en input y parece escaneo, evitamos que el código se escriba en el input
+      if (isEditableElement() && delta <= 80) {
+        e.preventDefault();
+      }
+    };
+
+    window.addEventListener("keydown", onKeyDown, { capture: true });
+    return () => window.removeEventListener("keydown", onKeyDown, { capture: true });
+  }, [products]);
 
   useEffect(() => {
     try {
