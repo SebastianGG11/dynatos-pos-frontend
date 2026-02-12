@@ -300,8 +300,8 @@ export default function Venta({ cashDrawer, onCashClosed }) {
         {receiptData && (
           <div
             style={{
-              width: "80mm",
-              padding: "5mm",
+              width: "58mm",
+              padding: "2mm",
               fontFamily: "monospace",
               backgroundColor: "#fff",
               fontSize: "11px",
