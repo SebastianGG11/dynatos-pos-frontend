@@ -241,11 +241,8 @@ export default function Venta({ cashDrawer, onCashClosed }) {
       customerDoc: finalCustomerDoc
     });
 
-    setTimeout(() => {
-      window.print();
-      clearCart();
-      loadAll();
-    }, 500);
+    window.electronAPI.printTicket(data)
+
   };
 
   const createSale = async () => {
