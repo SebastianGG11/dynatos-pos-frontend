@@ -4,11 +4,9 @@ import CerrarCaja from "./CerrarCaja";
 import {
   FiShoppingCart,
   FiUser,
-  FiDollarSign,
-  FiCreditCard,
+  FiLogOut,
   FiCheckSquare,
-  FiSquare,
-  FiLogOut
+  FiSquare
 } from "react-icons/fi";
 
 export default function Venta({ cashDrawer, onCashClosed }) {
@@ -56,58 +54,45 @@ export default function Venta({ cashDrawer, onCashClosed }) {
     if (found) {
       addProduct(found);
     } else {
-      // No lo freno con alert porque puede ser molesto en caja,
-      // pero lo dejo visible en consola por ahora:
       console.log("🔎 Código no encontrado:", code);
     }
   };
 
   useEffect(() => {
     const onKeyDown = (e) => {
-      // Teclas que no aportan al código
       if (e.key === "Shift" || e.key === "Alt" || e.key === "Control" || e.key === "Meta") return;
 
       const now = Date.now();
       const delta = now - (lastKeyTimeRef.current || 0);
       lastKeyTimeRef.current = now;
 
-      // Si el usuario está escribiendo normal en un input (tecleo lento), no interceptar
       const typingHuman = isEditableElement() && delta > 80;
 
-      // ENTER: fin de escaneo
       if (e.key === "Enter") {
         const candidate = scanBufferRef.current;
         scanBufferRef.current = "";
 
-        // Si venía de un escaneo (rápido) o el buffer está largo, procesar
         if (candidate && candidate.length >= 4) {
-          // Evita que "Enter" haga submit o active botones
           e.preventDefault();
           handleBarcodeScan(candidate);
         }
         return;
       }
 
-      // Solo caracteres típicos de barcode (muchos escáneres mandan letras/números y a veces - _)
       const isChar = /^[a-zA-Z0-9\-_]$/.test(e.key);
       if (!isChar) {
-        // Si cae una tecla rara, cortamos buffer para no contaminar
         if (!typingHuman) scanBufferRef.current = "";
         return;
       }
 
-      // Si es tecleo humano en input y lento, ignorar
       if (typingHuman) return;
 
-      // Heurística: los escáneres meten teclas MUY rápido (delta pequeño)
-      // Si pasan "lentas", reiniciamos buffer para no mezclar
       if (delta > 120) {
         scanBufferRef.current = e.key;
       } else {
         scanBufferRef.current += e.key;
       }
 
-      // Si estamos en input y parece escaneo, evitamos que el código se escriba en el input
       if (isEditableElement() && delta <= 80) {
         e.preventDefault();
       }
@@ -119,11 +104,9 @@ export default function Venta({ cashDrawer, onCashClosed }) {
 
   useEffect(() => {
     try {
-      // Buscamos el objeto de usuario que guardamos al hacer Login
       const userStored = localStorage.getItem("user");
       if (userStored) {
         const parsed = JSON.parse(userStored);
-        // Prioridad: Nombre completo -> Username -> "Cajero"
         setUsuarioActual(parsed.fullname || parsed.username || "Cajero");
       }
     } catch (e) {
@@ -191,21 +174,16 @@ export default function Venta({ cashDrawer, onCashClosed }) {
     setClientDoc("");
   };
 
-  // ✅ PREVIEW LOCAL (NO CREA VENTAS EN BD)
   useEffect(() => {
     if (!cashDrawer?.id) return;
-
     if (cart.length === 0) {
       setPreview(null);
       return;
     }
-
     const totalLocal = cart.reduce(
       (sum, i) => sum + Number(i.sale_price) * i.qty,
       0
     );
-
-    // mantenemos la misma forma de uso: preview?.total
     setPreview({ total: totalLocal });
   }, [cart, cashDrawer?.id]);
 
@@ -217,44 +195,50 @@ export default function Venta({ cashDrawer, onCashClosed }) {
   const baseGravable = total - valorImpuesto;
 
   const finalizeTransaction = async (method, received, change) => {
-  let finalCustomerName = "CLIENTE GENERAL";
-  let finalCustomerDoc = "";
+    let finalCustomerName = "CLIENTE GENERAL";
+    let finalCustomerDoc = "";
 
-  if (isCustomClient && clientName.trim()) {
-    finalCustomerName = clientName.trim();
-    finalCustomerDoc = clientDoc.trim();
-  }
+    if (isCustomClient && clientName.trim()) {
+      finalCustomerName = clientName.trim();
+      finalCustomerDoc = clientDoc.trim();
+    }
 
-  const ticket = {
-    id: sale.id,
-    sale_number: sale.sale_number,
-    date: new Date().toLocaleString(),
-    cajero: usuarioActual,
-    items: cart.map(i => ({
-      name: i.name,
-      qty: i.qty,
-      sale_price: i.sale_price
-    })),
-    subtotal: baseGravable,
-    impuesto: valorImpuesto,
-    total: total,
-    method,
-    received,
-    change,
-    customerName: finalCustomerName,
-    customerDoc: finalCustomerDoc
+    const ticket = {
+      id: sale.id,
+      sale_number: sale.sale_number,
+      date: new Date().toLocaleString(),
+      cajero: usuarioActual,
+      items: cart.map(i => ({
+        name: i.name,
+        qty: i.qty,
+        sale_price: i.sale_price
+      })),
+      subtotal: baseGravable,
+      impuesto: valorImpuesto,
+      total: total,
+      method,
+      received,
+      change,
+      customerName: finalCustomerName,
+      customerDoc: finalCustomerDoc
+    };
+
+    // Actualizamos el estado para renderizar el ticket en HTML (por si se imprime via window.print)
+    setReceiptData(ticket);
+
+    try {
+      // Enviamos la data al backend
+      await window.electronAPI.printTicket(ticket);
+    } catch (err) {
+      console.error("Error imprimiendo:", err);
+    }
+
+    // Pequeño delay para dar tiempo a procesar antes de limpiar
+    setTimeout(() => {
+        clearCart();
+        loadAll();
+    }, 500);
   };
-
-  try {
-    await window.electronAPI.printTicket(ticket);
-  } catch (err) {
-    console.error("Error imprimiendo:", err);
-  }
-
-  clearCart();
-  loadAll();
-};
-
 
   const createSale = async () => {
     try {
@@ -306,86 +290,109 @@ export default function Venta({ cashDrawer, onCashClosed }) {
 
   return (
     <div style={{ display: "flex", height: "100vh", backgroundColor: "#000", overflow: "hidden" }}>
-      {/* 🧾 ZONA DE IMPRESIÓN */}
-      <div id="print-area" style={{ display: "none" }}>
+      
+      {/* ========================================================= */}
+      {/* 🧾 ZONA DE IMPRESIÓN (HIDDEN) - CORREGIDA PARA 58MM       */}
+      {/* ========================================================= */}
+      <div id="print-area">
         {receiptData && (
           <div
             style={{
-              width: "58mm",
-              padding: "2mm",
-              fontFamily: "monospace",
+              width: "100%", // Se adapta al ancho definido en @page
+              padding: "0 2mm 5mm 2mm", // Padding lateral mínimo
+              fontFamily: '"Courier New", Courier, monospace',
               backgroundColor: "#fff",
-              fontSize: "11px",
-              color: "#000"
+              fontSize: "12px", // Letra un poco más grande
+              fontWeight: "bold", // NEGRITA OBLIGATORIA para térmicas
+              color: "#000", // Negro puro
+              lineHeight: "1.2"
             }}
           >
             <center>
-              <h2 style={{ margin: 0, fontSize: "16px" }}>DYNATOS</h2>
-              <p style={{ margin: 0 }}>MARKET & LICORERÍA</p>
+              <h2 style={{ margin: "5px 0 0 0", fontSize: "16px", fontWeight: "900" }}>DYNATOS</h2>
+              <p style={{ margin: 0, fontSize: "12px" }}>MARKET & LICORERÍA</p>
             </center>
-            <div style={{ marginTop: "10px" }}>
+            
+            <div style={{ marginTop: "10px", borderBottom: "1px dashed #000", paddingBottom: "5px" }}>
               <p style={{ margin: 0 }}>FECHA: {receiptData.date}</p>
-              <p style={{ margin: 0 }}>
-                FACTURA: {receiptData.sale_number || receiptData.id}
-              </p>
-              <p style={{ margin: 0 }}>
-                CAJERO: {String(receiptData.cajero).toUpperCase()}
-              </p>
+              <p style={{ margin: 0 }}>FACTURA: {receiptData.sale_number || receiptData.id}</p>
+              <p style={{ margin: 0 }}>CAJERO: {String(receiptData.cajero).toUpperCase()}</p>
               <p style={{ margin: "5px 0 0 0", fontWeight: "bold" }}>
-                CLIENTE: {receiptData.customerName}
+                CTE: {receiptData.customerName}
               </p>
               {receiptData.customerDoc && (
                 <p style={{ margin: 0 }}>NIT/CC: {receiptData.customerDoc}</p>
               )}
             </div>
-            <hr style={{ border: "0.5px dashed #000", margin: "5px 0" }} />
-            <table style={{ width: "100%" }}>
+
+            <table style={{ width: "100%", marginTop: "5px" }}>
               <tbody>
-                {receiptData.items.map((i) => (
-                  <tr key={i.id}>
-                    <td style={{ paddingRight: "5px" }}>
+                {receiptData.items.map((i, idx) => (
+                  <tr key={idx} style={{ verticalAlign: "top" }}>
+                    <td style={{ paddingRight: "5px", width: "65%" }}>
                       {i.qty} x {i.name}
                     </td>
-                    <td align="right">
+                    <td align="right" style={{ whiteSpace: "nowrap" }}>
                       ${(i.qty * i.sale_price).toLocaleString()}
                     </td>
                   </tr>
                 ))}
               </tbody>
             </table>
-            <hr style={{ border: "0.5px dashed #000" }} />
-            <div style={{ textAlign: "right" }}>
-              <p style={{ margin: 0 }}>
-                BASE: $
-                {receiptData.subtotal.toLocaleString(undefined, {
-                  maximumFractionDigits: 0
-                })}
-              </p>
-              <p style={{ margin: 0 }}>
-                IC / IMPOCONSUMO: $
-                {receiptData.impuesto.toLocaleString(undefined, {
-                  maximumFractionDigits: 0
-                })}
-              </p>
-              <h2 style={{ margin: "5px 0" }}>
+
+            <div style={{ borderTop: "1px dashed #000", margin: "5px 0", paddingTop: "5px", textAlign: "right" }}>
+              <h2 style={{ margin: "5px 0", fontSize: "18px", fontWeight: "900" }}>
                 TOTAL: ${receiptData.total.toLocaleString()}
               </h2>
             </div>
-            <div style={{ borderTop: "1px solid #000", marginTop: "5px" }}>
-              <p>MÉTODO: {receiptData.method}</p>
-              <p>RECIBIDO: ${receiptData.received.toLocaleString()}</p>
-              <p>CAMBIO: ${receiptData.change.toLocaleString()}</p>
+
+            <div style={{ marginTop: "5px", fontSize: "11px" }}>
+              <p style={{ margin: 0 }}>MÉTODO: {receiptData.method}</p>
+              <p style={{ margin: 0 }}>RECIBIDO: ${receiptData.received.toLocaleString()}</p>
+              <p style={{ margin: 0 }}>CAMBIO: ${receiptData.change.toLocaleString()}</p>
             </div>
-            <center style={{ marginTop: "10px" }}>*** GRACIAS ***</center>
+            
+            <center style={{ marginTop: "15px", fontSize: "11px" }}>*** GRACIAS ***</center>
           </div>
         )}
       </div>
 
-      <style>{`@media print { 
-        body * { visibility: hidden; } 
-        #print-area, #print-area * { visibility: visible; } 
-        #print-area { position: absolute; left: 0; top: 0; width: 100%; display: block !important; } 
-      }`}</style>
+      {/* ESTILOS CSS PARA IMPRESIÓN */}
+      <style>{`
+        @media print {
+          @page {
+            size: 58mm auto; /* Configura el papel virtual a 58mm */
+            margin: 0mm;     /* ELIMINA MÁRGENES DEL NAVEGADOR */
+          }
+          body {
+            margin: 0;
+            padding: 0;
+            background-color: #fff;
+          }
+          /* Oculta la interfaz del POS */
+          body > *:not(#print-area) {
+            display: none !important;
+          }
+          /* Muestra y posiciona el ticket */
+          #print-area {
+            display: block !important;
+            position: absolute;
+            top: 0;
+            left: 0;
+            width: 100%;
+            margin: 0;
+            /* Fuerza alto contraste para impresoras térmicas */
+            -webkit-print-color-adjust: exact;
+            print-color-adjust: exact;
+          }
+        }
+        /* En pantalla normal, el área de impresión se oculta */
+        @media screen {
+          #print-area {
+            display: none;
+          }
+        }
+      `}</style>
 
       {/* 1. SIDEBAR IZQUIERDO */}
       <div style={{ width: "200px", borderRight: "1px solid #D4AF37", padding: "20px", display: "flex", flexDirection: "column", background: "#050505" }}>
@@ -430,7 +437,7 @@ export default function Venta({ cashDrawer, onCashClosed }) {
           ))}
         </div>
 
-        {/* ✅ ZONA DE USUARIO AL FINAL DEL SIDEBAR */}
+        {/* ZONA DE USUARIO */}
         <div style={{ borderTop: "1px solid #333", paddingTop: "20px", marginTop: "10px" }}>
           <div style={{ display: "flex", alignItems: "center", gap: "10px", marginBottom: "15px", color: "#fff" }}>
             <div style={{ background: "#222", padding: "10px", borderRadius: "50%" }}>
@@ -465,7 +472,7 @@ export default function Venta({ cashDrawer, onCashClosed }) {
         </div>
       </div>
 
-      {/* 2. PRODUCTOS (LIMPIO ARRIBA) */}
+      {/* 2. PRODUCTOS */}
       <div style={{ flex: 1, padding: "30px", overflowY: "auto" }}>
         <h1 style={{ color: "#D4AF37", fontFamily: "serif", margin: "0 0 30px 0", borderBottom: "1px solid #222", paddingBottom: "15px" }}>
           PRODUCTOS
@@ -533,7 +540,6 @@ export default function Venta({ cashDrawer, onCashClosed }) {
             <span>${total.toLocaleString()}</span>
           </div>
 
-          {/* CHECKBOX CLIENTE */}
           {!sale && (
             <div style={{ marginBottom: "15px", padding: "10px", background: "#111", borderRadius: "8px", border: "1px solid #222" }}>
               <div
@@ -551,28 +557,14 @@ export default function Venta({ cashDrawer, onCashClosed }) {
                     placeholder="Nombre Completo"
                     value={clientName}
                     onChange={(e) => setClientName(e.target.value)}
-                    style={{
-                      background: "#000",
-                      border: "1px solid #333",
-                      color: "#fff",
-                      padding: "8px",
-                      borderRadius: "4px",
-                      outline: "none"
-                    }}
+                    style={{ background: "#000", border: "1px solid #333", color: "#fff", padding: "8px", borderRadius: "4px", outline: "none" }}
                   />
                   <input
                     type="text"
                     placeholder="NIT o Cédula"
                     value={clientDoc}
                     onChange={(e) => setClientDoc(e.target.value)}
-                    style={{
-                      background: "#000",
-                      border: "1px solid #333",
-                      color: "#fff",
-                      padding: "8px",
-                      borderRadius: "4px",
-                      outline: "none"
-                    }}
+                    style={{ background: "#000", border: "1px solid #333", color: "#fff", padding: "8px", borderRadius: "4px", outline: "none" }}
                   />
                 </div>
               )}
@@ -620,44 +612,20 @@ export default function Venta({ cashDrawer, onCashClosed }) {
               <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "10px" }}>
                 <button
                   onClick={payCash}
-                  style={{
-                    padding: "15px",
-                    background: "#D4AF37",
-                    color: "#000",
-                    border: "none",
-                    borderRadius: "8px",
-                    fontWeight: "bold",
-                    cursor: "pointer"
-                  }}
+                  style={{ padding: "15px", background: "#D4AF37", color: "#000", border: "none", borderRadius: "8px", fontWeight: "bold", cursor: "pointer" }}
                 >
                   EFECTIVO
                 </button>
                 <button
                   onClick={() => setShowQRConfirm(true)}
-                  style={{
-                    padding: "15px",
-                    border: "1px solid #32CD32",
-                    color: "#32CD32",
-                    background: "none",
-                    borderRadius: "8px",
-                    fontWeight: "bold",
-                    cursor: "pointer"
-                  }}
+                  style={{ padding: "15px", border: "1px solid #32CD32", color: "#32CD32", background: "none", borderRadius: "8px", fontWeight: "bold", cursor: "pointer" }}
                 >
                   NEQUI / QR
                 </button>
               </div>
               <button
                 onClick={() => setSale(null)}
-                style={{
-                  width: "100%",
-                  marginTop: "15px",
-                  color: "#666",
-                  background: "none",
-                  border: "none",
-                  cursor: "pointer",
-                  textDecoration: "underline"
-                }}
+                style={{ width: "100%", marginTop: "15px", color: "#666", background: "none", border: "none", cursor: "pointer", textDecoration: "underline" }}
               >
                 Cancelar
               </button>
