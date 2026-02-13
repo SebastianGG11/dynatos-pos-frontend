@@ -292,67 +292,90 @@ export default function Venta({ cashDrawer, onCashClosed }) {
     <div style={{ display: "flex", height: "100vh", backgroundColor: "#000", overflow: "hidden" }}>
       
       {/* ========================================================= */}
-      {/* 🧾 ZONA DE IMPRESIÓN (HIDDEN) - CORREGIDA PARA 58MM       */}
+      {/* 🧾 ZONA DE IMPRESIÓN (HIDDEN) - OPTIMIZADA PARA 58MM     */}
       {/* ========================================================= */}
       <div id="print-area">
         {receiptData && (
           <div
             style={{
-              width: "100%", // Se adapta al ancho definido en @page
-              padding: "0 2mm 5mm 2mm", // Padding lateral mínimo
-              fontFamily: '"Courier New", Courier, monospace',
+              width: "100%",
+              padding: "0",
+              margin: "0",
+              fontFamily: 'Arial, sans-serif',
               backgroundColor: "#fff",
-              fontSize: "12px", // Letra un poco más grande
-              fontWeight: "bold", // NEGRITA OBLIGATORIA para térmicas
-              color: "#000", // Negro puro
-              lineHeight: "1.2"
+              fontSize: "9px",
+              fontWeight: "900", // NEGRO FUERTE
+              color: "#000",
+              lineHeight: "1.1"
             }}
           >
-            <center>
-              <h2 style={{ margin: "5px 0 0 0", fontSize: "16px", fontWeight: "900" }}>DYNATOS</h2>
-              <p style={{ margin: 0, fontSize: "12px" }}>MARKET & LICORERÍA</p>
-            </center>
+            {/* HEADER */}
+            <div style={{ textAlign: "center", marginBottom: "3px" }}>
+              <div style={{ fontSize: "14px", fontWeight: "900", margin: "0" }}>DYNATOS</div>
+              <div style={{ fontSize: "9px", margin: "0" }}>MARKET & LICORERIA</div>
+            </div>
             
-            <div style={{ marginTop: "10px", borderBottom: "1px dashed #000", paddingBottom: "5px" }}>
-              <p style={{ margin: 0 }}>FECHA: {receiptData.date}</p>
-              <p style={{ margin: 0 }}>FACTURA: {receiptData.sale_number || receiptData.id}</p>
-              <p style={{ margin: 0 }}>CAJERO: {String(receiptData.cajero).toUpperCase()}</p>
-              <p style={{ margin: "5px 0 0 0", fontWeight: "bold" }}>
+            {/* SEPARADOR */}
+            <div style={{ borderBottom: "1px dashed #000", margin: "3px 0" }}></div>
+            
+            {/* INFO FACTURA */}
+            <div style={{ fontSize: "8px", marginBottom: "3px" }}>
+              <div>FECHA: {receiptData.date}</div>
+              <div>FACT: {receiptData.sale_number || receiptData.id}</div>
+              <div>CAJERO: {String(receiptData.cajero).toUpperCase()}</div>
+              <div style={{ fontWeight: "900", marginTop: "2px" }}>
                 CTE: {receiptData.customerName}
-              </p>
+              </div>
               {receiptData.customerDoc && (
-                <p style={{ margin: 0 }}>NIT/CC: {receiptData.customerDoc}</p>
+                <div>NIT/CC: {receiptData.customerDoc}</div>
               )}
             </div>
 
-            <table style={{ width: "100%", marginTop: "5px" }}>
-              <tbody>
-                {receiptData.items.map((i, idx) => (
-                  <tr key={idx} style={{ verticalAlign: "top" }}>
-                    <td style={{ paddingRight: "5px", width: "65%" }}>
-                      {i.qty} x {i.name}
-                    </td>
-                    <td align="right" style={{ whiteSpace: "nowrap" }}>
-                      ${(i.qty * i.sale_price).toLocaleString()}
-                    </td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
+            {/* SEPARADOR */}
+            <div style={{ borderBottom: "1px dashed #000", margin: "3px 0" }}></div>
 
-            <div style={{ borderTop: "1px dashed #000", margin: "5px 0", paddingTop: "5px", textAlign: "right" }}>
-              <h2 style={{ margin: "5px 0", fontSize: "18px", fontWeight: "900" }}>
-                TOTAL: ${receiptData.total.toLocaleString()}
-              </h2>
+            {/* PRODUCTOS - OPTIMIZADO PARA NO CORTARSE */}
+            <div style={{ fontSize: "8px" }}>
+              {receiptData.items.map((i, idx) => {
+                const nombre = i.name.length > 18 ? i.name.substring(0, 18) + '...' : i.name;
+                const precio = `$${(i.qty * i.sale_price).toLocaleString()}`;
+                
+                return (
+                  <div key={idx} style={{ marginBottom: "2px" }}>
+                    {/* Línea 1: Cantidad x Nombre */}
+                    <div>{i.qty} x {nombre}</div>
+                    {/* Línea 2: Precio alineado a la derecha */}
+                    <div style={{ textAlign: "right", fontWeight: "900" }}>{precio}</div>
+                  </div>
+                );
+              })}
             </div>
 
-            <div style={{ marginTop: "5px", fontSize: "11px" }}>
-              <p style={{ margin: 0 }}>MÉTODO: {receiptData.method}</p>
-              <p style={{ margin: 0 }}>RECIBIDO: ${receiptData.received.toLocaleString()}</p>
-              <p style={{ margin: 0 }}>CAMBIO: ${receiptData.change.toLocaleString()}</p>
+            {/* SEPARADOR */}
+            <div style={{ borderTop: "1px dashed #000", margin: "3px 0" }}></div>
+
+            {/* TOTAL */}
+            <div style={{ textAlign: "right", fontSize: "14px", fontWeight: "900", margin: "5px 0" }}>
+              TOTAL: ${receiptData.total.toLocaleString()}
+            </div>
+
+            {/* SEPARADOR */}
+            <div style={{ borderTop: "1px dashed #000", margin: "3px 0" }}></div>
+
+            {/* MÉTODO DE PAGO */}
+            <div style={{ fontSize: "8px" }}>
+              <div>METODO: {receiptData.method}</div>
+              <div>RECIBIDO: ${receiptData.received.toLocaleString()}</div>
+              <div>CAMBIO: ${receiptData.change.toLocaleString()}</div>
             </div>
             
-            <center style={{ marginTop: "15px", fontSize: "11px" }}>*** GRACIAS ***</center>
+            {/* DESPEDIDA */}
+            <div style={{ textAlign: "center", marginTop: "8px", fontSize: "9px", fontWeight: "900" }}>
+              *** GRACIAS ***
+            </div>
+
+            {/* ESPACIO PARA CORTE */}
+            <div style={{ height: "15px" }}></div>
           </div>
         )}
       </div>
@@ -361,19 +384,17 @@ export default function Venta({ cashDrawer, onCashClosed }) {
       <style>{`
         @media print {
           @page {
-            size: 58mm auto; /* Configura el papel virtual a 58mm */
-            margin: 0mm;     /* ELIMINA MÁRGENES DEL NAVEGADOR */
+            size: 58mm auto;
+            margin: 0mm;
           }
           body {
             margin: 0;
             padding: 0;
             background-color: #fff;
           }
-          /* Oculta la interfaz del POS */
           body > *:not(#print-area) {
             display: none !important;
           }
-          /* Muestra y posiciona el ticket */
           #print-area {
             display: block !important;
             position: absolute;
@@ -381,12 +402,11 @@ export default function Venta({ cashDrawer, onCashClosed }) {
             left: 0;
             width: 100%;
             margin: 0;
-            /* Fuerza alto contraste para impresoras térmicas */
+            padding: 0;
             -webkit-print-color-adjust: exact;
             print-color-adjust: exact;
           }
         }
-        /* En pantalla normal, el área de impresión se oculta */
         @media screen {
           #print-area {
             display: none;
