@@ -65,7 +65,7 @@ async function printTicket(data) {
     });
 
     data.items.forEach(item => {
-      const nombre = item.name.length > 20 ? item.name.substring(0, 20) : item.name;
+      const nombre = item.name.length > 50 ? item.name.substring(0, 20) : item.name;
       items.push({
         type: "text",
         value: `${item.qty} x ${nombre}`,
