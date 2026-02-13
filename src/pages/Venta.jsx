@@ -380,12 +380,12 @@ export default function Venta({ cashDrawer, onCashClosed }) {
           .ticket-58mm {
             width: 58mm;
             font-family: 'Courier New', Courier, monospace;
-            font-size: 10px;
+            font-size: 9px;
             font-weight: 900;
             line-height: 1.3;
             color: #000000;
             background: #ffffff;
-            padding: 2mm;
+            padding: 0mm 1mm 0mm 0mm;
             -webkit-print-color-adjust: exact;
             print-color-adjust: exact;
           }
@@ -398,14 +398,14 @@ export default function Venta({ cashDrawer, onCashClosed }) {
           .header-ticket h1 {
             font-size: 18px;
             font-weight: 900;
-            margin: 0 0 1mm 0;
+            margin:  2mm 0 1mm 0;
             letter-spacing: 2px;
           }
           
           .header-ticket p {
-            font-size: 11px;
+            font-size: 10px;
             font-weight: 900;
-            margin: 0;
+            margin: 0 0 2mm 0;
           }
           
           .line-ticket {
@@ -415,10 +415,10 @@ export default function Venta({ cashDrawer, onCashClosed }) {
           }
           
           .info-ticket div {
-            font-size: 9px;
+            font-size: 8px;
             font-weight: 900;
             margin: 1mm 0;
-            word-wrap: break-word;
+          
           }
           
           .product-item-ticket {
@@ -426,15 +426,16 @@ export default function Venta({ cashDrawer, onCashClosed }) {
           }
           
           .product-item-ticket div {
-            font-size: 9px;
+            font-size: 8px;
             font-weight: 900;
-            word-wrap: break-word;
+            
           }
           
           .price-ticket {
             text-align: right;
-            font-size: 10px;
-            margin-top: 1mm;
+            font-size: 9px;
+            font-weight: 900;
+            margin-top: 0.5mm;
           }
           
           .total-ticket {
@@ -446,14 +447,14 @@ export default function Venta({ cashDrawer, onCashClosed }) {
           }
           
           .payment-ticket div {
-            font-size: 9px;
+            font-size: 8px;
             font-weight: 900;
             margin: 1mm 0;
           }
           
           .footer-ticket {
             text-align: center;
-            font-size: 12px;
+            font-size: 11px;
             font-weight: 900;
             margin-top: 5mm;
             letter-spacing: 2px;
