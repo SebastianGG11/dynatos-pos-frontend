@@ -19,7 +19,6 @@ export default function Venta({ cashDrawer, onCashClosed }) {
   const [cashReceived, setCashReceived] = useState("");
   const [showQRConfirm, setShowQRConfirm] = useState(false);
   const [showCloseCash, setShowCloseCash] = useState(false);
-  const [receiptData, setReceiptData] = useState(null);
 
   const [isCustomClient, setIsCustomClient] = useState(false);
   const [clientName, setClientName] = useState("");
@@ -27,7 +26,6 @@ export default function Venta({ cashDrawer, onCashClosed }) {
 
   const [usuarioActual, setUsuarioActual] = useState("Cajero");
 
-  // Detectar si está en Electron o Web
   const isElectron = typeof window !== 'undefined' && window.electronAPI;
 
   const scanBufferRef = useRef("");
@@ -164,7 +162,6 @@ export default function Venta({ cashDrawer, onCashClosed }) {
     setSale(null);
     setPreview(null);
     setCashReceived("");
-    setReceiptData(null);
     setIsCustomClient(false);
     setClientName("");
     setClientDoc("");
@@ -219,27 +216,73 @@ export default function Venta({ cashDrawer, onCashClosed }) {
       customerDoc: finalCustomerDoc
     };
 
-    setReceiptData(ticket);
-
     try {
-      // 🔥 SISTEMA DUAL: Electron vs Web
       if (isElectron) {
-        // Versión EXE - Impresión directa
+        // Electron - Impresión directa
+        console.log("🖨 Imprimiendo en Electron...");
         await window.electronAPI.printTicket(ticket);
       } else {
-        // Versión WEB - window.print()
+        // WEB - Impresión con diálogo
+        const ticketHTML = `
+          <div style="width:58mm;font-family:monospace;font-size:10px;font-weight:900;padding:2mm;">
+            <div style="text-align:center;font-size:18px;">DYNATOS</div>
+            <div style="text-align:center;font-size:11px;">MARKET & LICORERIA</div>
+            <div style="border-top:2px dashed #000;margin:2mm 0;"></div>
+            <div>FECHA: ${ticket.date}</div>
+            <div>FACT: ${ticket.sale_number}</div>
+            <div>CAJERO: ${ticket.cajero}</div>
+            <div>CLIENTE: ${ticket.customerName}</div>
+            ${ticket.customerDoc ? `<div>DOC: ${ticket.customerDoc}</div>` : ''}
+            <div style="border-top:2px dashed #000;margin:2mm 0;"></div>
+            ${ticket.items.map(i => `
+              <div style="margin:2mm 0;">
+                <div>${i.qty} x ${i.name.substring(0, 20)}</div>
+                <div style="text-align:right;font-size:10px;">$${(i.qty * i.sale_price).toLocaleString()}</div>
+              </div>
+            `).join('')}
+            <div style="border-top:2px dashed #000;margin:2mm 0;"></div>
+            <div style="text-align:right;font-size:20px;">TOTAL: $${ticket.total.toLocaleString()}</div>
+            <div style="border-top:2px dashed #000;margin:2mm 0;"></div>
+            <div>METODO: ${ticket.method}</div>
+            <div>RECIBIDO: $${ticket.received.toLocaleString()}</div>
+            <div>CAMBIO: $${ticket.change.toLocaleString()}</div>
+            <div style="text-align:center;margin-top:5mm;font-size:12px;">*** GRACIAS ***</div>
+          </div>
+        `;
+        
+        const printWindow = window.open('', '_blank', 'width=300,height=600');
+        printWindow.document.write(`
+          <html>
+            <head>
+              <title>Ticket - DYNATOS</title>
+              <style>
+                @page { size: 58mm 297mm; margin: 0; }
+                body { margin: 0; padding: 0; }
+              </style>
+            </head>
+            <body>${ticketHTML}</body>
+          </html>
+        `);
+        printWindow.document.close();
+        
         setTimeout(() => {
-          window.print();
-        }, 300);
+          printWindow.focus();
+          printWindow.print();
+          
+          setTimeout(() => {
+            printWindow.close();
+          }, 1000);
+        }, 500);
       }
     } catch (err) {
-      console.error("Error imprimiendo:", err);
+      console.error("Error:", err);
+      alert("Error al imprimir");
     }
 
     setTimeout(() => {
       clearCart();
       loadAll();
-    }, 800);
+    }, 1000);
   };
 
   const createSale = async () => {
@@ -293,182 +336,7 @@ export default function Venta({ cashDrawer, onCashClosed }) {
   return (
     <div style={{ display: "flex", height: "100vh", backgroundColor: "#000", overflow: "hidden" }}>
       
-      {/* ========================================================= */}
-      {/* 🧾 ZONA DE IMPRESIÓN WEB (Solo para versión navegador)    */}
-      {/* ========================================================= */}
-      <div id="print-area">
-        {receiptData && (
-          <div className="ticket-58mm">
-            <div className="header-ticket">
-              <h1>DYNATOS</h1>
-              <p>MARKET & LICORERIA</p>
-            </div>
-            
-            <div className="line-ticket"></div>
-            
-            <div className="info-ticket">
-              <div>FECHA: {receiptData.date}</div>
-              <div>FACT: {receiptData.sale_number || receiptData.id}</div>
-              <div>CAJERO: {String(receiptData.cajero).toUpperCase()}</div>
-              <div>CLIENTE: {receiptData.customerName}</div>
-              {receiptData.customerDoc && (
-                <div>DOC: {receiptData.customerDoc}</div>
-              )}
-            </div>
-
-            <div className="line-ticket"></div>
-
-            <div className="products-ticket">
-              {receiptData.items.map((i, idx) => {
-                const nombre = i.name.length > 18 ? i.name.substring(0, 18) : i.name;
-                return (
-                  <div key={idx} className="product-item-ticket">
-                    <div>{i.qty} x {nombre}</div>
-                    <div className="price-ticket">
-                      ${(i.qty * i.sale_price).toLocaleString()}
-                    </div>
-                  </div>
-                );
-              })}
-            </div>
-
-            <div className="line-ticket"></div>
-
-            <div className="total-ticket">
-              ${receiptData.total.toLocaleString()}
-            </div>
-
-            <div className="line-ticket"></div>
-
-            <div className="payment-ticket">
-              <div>METODO: {receiptData.method}</div>
-              <div>RECIBIDO: ${receiptData.received.toLocaleString()}</div>
-              <div>CAMBIO: ${receiptData.change.toLocaleString()}</div>
-            </div>
-            
-            <div className="footer-ticket">
-              *** GRACIAS ***
-            </div>
-          </div>
-        )}
-      </div>
-
-      {/* ESTILOS CSS PARA IMPRESIÓN WEB */}
-      <style>{`
-        @media print {
-          @page {
-            size: 58mm 297mm;
-            margin: 0mm;
-          }
-          
-          body {
-            margin: 0;
-            padding: 0;
-          }
-          
-          body > *:not(#print-area) {
-            display: none !important;
-          }
-          
-          #print-area {
-            display: block !important;
-            width: 58mm;
-            margin: 0;
-            padding: 0;
-          }
-          
-          .ticket-58mm {
-            width: 58mm;
-            font-family: 'Courier New', Courier, monospace;
-            font-size: 9px;
-            font-weight: 900;
-            line-height: 1.3;
-            color: #000000;
-            background: #ffffff;
-            padding: 0mm 1mm 0mm 0mm;
-            -webkit-print-color-adjust: exact;
-            print-color-adjust: exact;
-          }
-          
-          .header-ticket {
-            text-align: center;
-            margin-bottom: 2mm;
-          }
-          
-          .header-ticket h1 {
-            font-size: 18px;
-            font-weight: 900;
-            margin:  2mm 0 1mm 0;
-            letter-spacing: 2px;
-          }
-          
-          .header-ticket p {
-            font-size: 10px;
-            font-weight: 900;
-            margin: 0 0 2mm 0;
-          }
-          
-          .line-ticket {
-            border-top: 2px dashed #000000;
-            margin: 2mm 0;
-            height: 0;
-          }
-          
-          .info-ticket div {
-            font-size: 8px;
-            font-weight: 900;
-            margin: 1mm 0;
-          
-          }
-          
-          .product-item-ticket {
-            margin: 2mm 0;
-          }
-          
-          .product-item-ticket div {
-            font-size: 8px;
-            font-weight: 900;
-            
-          }
-          
-          .price-ticket {
-            text-align: right;
-            font-size: 9px;
-            font-weight: 900;
-            margin-top: 0.5mm;
-          }
-          
-          .total-ticket {
-            text-align: right;
-            font-size: 20px;
-            font-weight: 900;
-            margin: 3mm 0;
-            letter-spacing: 1px;
-          }
-          
-          .payment-ticket div {
-            font-size: 8px;
-            font-weight: 900;
-            margin: 1mm 0;
-          }
-          
-          .footer-ticket {
-            text-align: center;
-            font-size: 11px;
-            font-weight: 900;
-            margin-top: 5mm;
-            letter-spacing: 2px;
-          }
-        }
-        
-        @media screen {
-          #print-area {
-            display: none;
-          }
-        }
-      `}</style>
-
-      {/* INTERFAZ DEL POS (no cambia) */}
+      {/* SIDEBAR IZQUIERDO */}
       <div style={{ width: "200px", borderRight: "1px solid #D4AF37", padding: "20px", display: "flex", flexDirection: "column", background: "#050505" }}>
         <h3 style={{ color: "#D4AF37", fontSize: "0.8rem", marginBottom: "20px", letterSpacing: "1px" }}>CATEGORÍAS</h3>
         <div style={{ flex: 1, overflowY: "auto" }}>
@@ -545,6 +413,7 @@ export default function Venta({ cashDrawer, onCashClosed }) {
         </div>
       </div>
 
+      {/* PRODUCTOS */}
       <div style={{ flex: 1, padding: "30px", overflowY: "auto" }}>
         <h1 style={{ color: "#D4AF37", fontFamily: "serif", margin: "0 0 30px 0", borderBottom: "1px solid #222", paddingBottom: "15px" }}>
           PRODUCTOS
@@ -574,6 +443,7 @@ export default function Venta({ cashDrawer, onCashClosed }) {
         </div>
       </div>
 
+      {/* CARRITO */}
       <div style={{ width: "380px", borderLeft: "1px solid #222", display: "flex", flexDirection: "column", backgroundColor: "#080808" }}>
         <div style={{ padding: "20px", borderBottom: "1px solid #222", color: "#D4AF37", fontWeight: "bold", fontSize: "1.1rem" }}>
           <FiShoppingCart style={{ marginRight: "8px", verticalAlign: "bottom" }} /> TICKETE ACTUAL
