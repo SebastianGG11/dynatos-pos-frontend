@@ -213,17 +213,68 @@ export default function Venta({ cashDrawer, onCashClosed }) {
   };
 
   // Función original para productos sin presentaciones
-  const addProduct = (p) => {
+// ✅ MEJORADO: Buscar presentaciones también al hacer clic
+  const addProduct = async (p) => {
     if (getAvailableStock(p) <= 0) return;
-    setCart((prev) => {
-      const found = prev.find((item) => item.id === p.id && !item.is_presentation);
-      return found
-        ? prev.map((item) =>
-            item.id === p.id && !item.is_presentation ? { ...item, qty: item.qty + 1 } : item
-          )
-        : [...prev, { ...p, qty: 1, is_presentation: false }];
-    });
-  };
+
+  // Intentar buscar presentaciones del producto
+    try {
+      const res = await api.get(`/presentations/${p.id}/presentations`);
+      const presentations = res.data.items || [];
+
+      if (presentations.length === 0) {
+      // No tiene presentaciones, agregar normalmente
+        setCart((prev) => {
+          const found = prev.find((item) => item.id === p.id && !item.is_presentation);
+          return found
+            ? prev.map((item) =>
+              item.id === p.id && !item.is_presentation ? { ...item, qty: item.qty + 1 } : item
+             )
+            : [...prev, { ...p, qty: 1, is_presentation: false }];
+        });
+      } else if (presentations.length === 1) {
+      // Una sola presentación, agregar directamente
+        const pres = presentations[0];
+        addPresentationToCart(
+         p.id,
+         p.name,
+          pres.id,
+          pres.name,
+          pres.quantity,
+          pres.sale_price,
+          p.current_stock
+       );
+      } else {
+      // Múltiples presentaciones, mostrar modal
+        setCurrentProductPresentations({
+          product_id: p.id,
+          product_name: p.name,
+          base_stock: p.current_stock,
+          cost_price: p.cost_price,
+          image_filename: p.image_filename,
+          single_presentation: false,
+          presentations: presentations.map(pr => ({
+            id: pr.id,
+            presentation_name: pr.name,
+            quantity: pr.quantity,
+            sale_price: pr.sale_price
+          }))
+        });
+       setShowPresentationsModal(true);
+      }
+    } catch (error) {
+     // Error obteniendo presentaciones, agregar como producto normal
+     console.log("No se encontraron presentaciones, agregando como producto normal");
+     setCart((prev) => {
+       const found = prev.find((item) => item.id === p.id && !item.is_presentation);
+       return found
+         ? prev.map((item) =>
+             item.id === p.id && !item.is_presentation ? { ...item, qty: item.qty + 1 } : item
+           )
+         : [...prev, { ...p, qty: 1, is_presentation: false }];
+     });
+   }
+  };;
 
   const increaseQty = (cartId) =>
     setCart((prev) =>
