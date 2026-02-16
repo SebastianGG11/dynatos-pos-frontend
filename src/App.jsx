@@ -10,6 +10,7 @@ import AdminLayout from "./components/AdminLayout.jsx";
 // ✅ Páginas del admin
 import Dashboard from "./pages/Dashboard.jsx";
 import AdminProducts from "./pages/AdminProducts.jsx";
+import AdminPresentations from "./components/AdminPresentations.jsx"; // ✅ NUEVO
 import AdminUsers from "./pages/AdminUsers.jsx";
 import AdminSales from "./pages/AdminSales.jsx";
 import AdminPromotions from "./pages/AdminPromotions.jsx";
@@ -17,7 +18,7 @@ import AdminPurchases from "./pages/AdminPurchases.jsx";
 import AdminReturns from "./pages/AdminReturns.jsx"; 
 import AdminFinancials from "./pages/AdminFinancials.jsx"; 
 import AdminExpenses from "./pages/AdminExpenses.jsx";
-import AdminAdjustments from "./pages/AdminAdjustments.jsx"; // 👈 1. NUEVA IMPORTACIÓN (MERMAS)
+import AdminAdjustments from "./pages/AdminAdjustments.jsx";
 
 function getUserSafe() {
   try {
@@ -97,18 +98,15 @@ export default function App() {
           <Route index element={<Dashboard />} />
           
           <Route path="productos" element={<AdminProducts />} />
+          <Route path="productos/:productId/presentations" element={<AdminPresentations />} /> {/* ✅ NUEVO */}
           <Route path="compras" element={<AdminPurchases />} />
           <Route path="promociones" element={<AdminPromotions />} />
           <Route path="usuarios" element={<AdminUsers />} />
           <Route path="ventas" element={<AdminSales />} />
           <Route path="returns" element={<AdminReturns />} />
-          
-          {/* 👇 2. AQUÍ ESTÁ LA NUEVA RUTA DE MERMAS */}
           <Route path="adjustments" element={<AdminAdjustments />} />
-          
           <Route path="expenses" element={<AdminExpenses />} />
           <Route path="financials" element={<AdminFinancials />} />
-          
           <Route path="dashboard" element={<Dashboard />} />
         </Route>
 
