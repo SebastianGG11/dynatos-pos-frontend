@@ -1,15 +1,18 @@
 import { useEffect, useState, useRef } from "react";
+import { useNavigate } from "react-router-dom"; // ✅ AGREGADO
 import api from "../api/api"; 
 import { FiPlus, FiEdit, FiTrash2, FiSearch, FiX, FiTrendingUp, FiPackage, FiGrid } from "react-icons/fi";
 import { FaBarcode } from "react-icons/fa"; 
 
 export default function AdminProducts() {
+  const navigate = useNavigate(); // ✅ AGREGADO
+  
   const [products, setProducts] = useState([]);
-  const [allProducts, setAllProducts] = useState([]); // ✅ Guardamos todos los productos
+  const [allProducts, setAllProducts] = useState([]);
   const [categories, setCategories] = useState([]);
   const [loading, setLoading] = useState(false);
   const [searchTerm, setSearchTerm] = useState("");
-  const [selectedCategory, setSelectedCategory] = useState(null); // ✅ Categoría seleccionada
+  const [selectedCategory, setSelectedCategory] = useState(null);
   const [showModal, setShowModal] = useState(false);
   const [isEditing, setIsEditing] = useState(false);
 
@@ -42,8 +45,8 @@ export default function AdminProducts() {
     try {
       const res = await api.get("/products");
       const productsList = res.data.items || [];
-      setAllProducts(productsList); // ✅ Guardamos todos
-      setProducts(productsList);    // ✅ Mostramos todos inicialmente
+      setAllProducts(productsList);
+      setProducts(productsList);
     } catch (error) {
       console.error("Error al cargar productos", error);
     } finally {
@@ -64,7 +67,6 @@ export default function AdminProducts() {
     setSearchTerm(val);
     
     if (val.trim().length === 0) {
-      // Si no hay búsqueda, aplicar filtro de categoría si existe
       if (selectedCategory) {
         setProducts(allProducts.filter(p => p.category_id === selectedCategory));
       } else {
@@ -78,7 +80,6 @@ export default function AdminProducts() {
         const res = await api.get(`/products/search?q=${val}`);
         let filtered = res.data.items || [];
         
-        // Aplicar filtro de categoría si existe
         if (selectedCategory) {
           filtered = filtered.filter(p => p.category_id === selectedCategory);
         }
@@ -90,22 +91,18 @@ export default function AdminProducts() {
     }
   };
 
-  // ✅ Filtrar por categoría
   const handleCategoryFilter = (categoryId) => {
     setSelectedCategory(categoryId);
     
     if (categoryId === null) {
-      // Mostrar todos
       if (searchTerm.trim().length > 0) {
         handleSearch(searchTerm);
       } else {
         setProducts(allProducts);
       }
     } else {
-      // Filtrar por categoría
       let filtered = allProducts.filter(p => p.category_id === categoryId);
       
-      // Aplicar búsqueda si existe
       if (searchTerm.trim().length > 0) {
         const searchLower = searchTerm.toLowerCase();
         filtered = filtered.filter(p => 
@@ -118,7 +115,6 @@ export default function AdminProducts() {
     }
   };
 
-  // ✅ Contar productos por categoría
   const getProductCountByCategory = (categoryId) => {
     return allProducts.filter(p => p.category_id === categoryId).length;
   };
@@ -225,7 +221,7 @@ export default function AdminProducts() {
         </div>
       </div>
 
-      {/* ✅ BARRA DE CATEGORÍAS */}
+      {/* BARRA DE CATEGORÍAS */}
       <div style={{ marginBottom: "30px", padding: "20px", background: "#0a0a0a", borderRadius: "15px", border: "1px solid #1a1a1a" }}>
         <div style={{ display: "flex", alignItems: "center", gap: "10px", marginBottom: "15px" }}>
           <FiGrid color="#D4AF37" size={20} />
@@ -233,7 +229,6 @@ export default function AdminProducts() {
         </div>
         
         <div style={{ display: "flex", flexWrap: "wrap", gap: "12px" }}>
-          {/* Botón TODAS */}
           <button
             onClick={() => handleCategoryFilter(null)}
             style={{
@@ -262,7 +257,6 @@ export default function AdminProducts() {
             </span>
           </button>
 
-          {/* Botones de Categorías */}
           {categories.map(cat => {
             const count = getProductCountByCategory(cat.id);
             const isActive = selectedCategory === cat.id;
@@ -342,8 +336,22 @@ export default function AdminProducts() {
                     </span>
                   </td>
                   <td style={{ padding: "20px", textAlign: "center" }}>
-                    <button onClick={() => handleOpenEdit(p)} style={{ background: "none", border: "none", cursor: "pointer", marginRight: "20px" }}><FiEdit color="#D4AF37" size={20} /></button>
-                    <button onClick={() => handleDelete(p.id)} style={{ background: "none", border: "none", cursor: "pointer" }}><FiTrash2 color="#ff4444" size={20} /></button>
+                    {/* ✅ BOTÓN DE PRESENTACIONES (NUEVO) */}
+                    <button 
+                      onClick={() => navigate(`/admin/productos/${p.id}/presentations`)} 
+                      style={{ background: "none", border: "none", cursor: "pointer", marginRight: "15px" }}
+                      title="Gestionar presentaciones"
+                    >
+                      <FiPackage color="#2ecc71" size={20} />
+                    </button>
+                    
+                    <button onClick={() => handleOpenEdit(p)} style={{ background: "none", border: "none", cursor: "pointer", marginRight: "15px" }}>
+                      <FiEdit color="#D4AF37" size={20} />
+                    </button>
+                    
+                    <button onClick={() => handleDelete(p.id)} style={{ background: "none", border: "none", cursor: "pointer" }}>
+                      <FiTrash2 color="#ff4444" size={20} />
+                    </button>
                   </td>
                 </tr>
               );
@@ -352,7 +360,7 @@ export default function AdminProducts() {
         </table>
       </div>
 
-      {/* MODAL (sin cambios) */}
+      {/* MODAL */}
       {showModal && (
         <div style={{ position: "fixed", top: 0, left: 0, width: "100%", height: "100%", background: "rgba(0,0,0,0.85)", display: "flex", justifyContent: "center", alignItems: "center", zIndex: 1000, backdropFilter: "blur(10px)" }}>
           <div style={{ background: "#0a0a0a", width: "550px", maxHeight: "90vh", overflowY: "auto", padding: "40px", borderRadius: "30px", border: "1px solid #D4AF37" }}>
