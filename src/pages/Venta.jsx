@@ -6,7 +6,9 @@ import {
   FiUser,
   FiLogOut,
   FiCheckSquare,
-  FiSquare
+  FiSquare,
+  FiPackage,
+  FiX
 } from "react-icons/fi";
 
 export default function Venta({ cashDrawer, onCashClosed }) {
@@ -19,6 +21,10 @@ export default function Venta({ cashDrawer, onCashClosed }) {
   const [cashReceived, setCashReceived] = useState("");
   const [showQRConfirm, setShowQRConfirm] = useState(false);
   const [showCloseCash, setShowCloseCash] = useState(false);
+
+  // ✅ NUEVO: Estados para presentaciones
+  const [showPresentationsModal, setShowPresentationsModal] = useState(false);
+  const [currentProductPresentations, setCurrentProductPresentations] = useState(null);
 
   const [isCustomClient, setIsCustomClient] = useState(false);
   const [clientName, setClientName] = useState("");
@@ -38,18 +44,43 @@ export default function Venta({ cashDrawer, onCashClosed }) {
     return tag === "input" || tag === "textarea" || el.isContentEditable;
   };
 
-  const handleBarcodeScan = (codeRaw) => {
+  // ✅ MODIFICADO: Ahora busca presentaciones por código de barras
+  const handleBarcodeScan = async (codeRaw) => {
     const code = String(codeRaw || "").trim();
     if (!code) return;
 
-    const found =
-      products.find((p) => String(p.barcode || "").trim() === code) ||
-      products.find((p) => String(p.sku || "").trim() === code);
+    try {
+      // Buscar presentaciones por código de barras
+      const res = await api.get(`/presentations/search?q=${code}`);
+      const data = res.data;
 
-    if (found) {
-      addProduct(found);
-    } else {
+      if (data.single_presentation) {
+        // Solo tiene una presentación, agregar directamente
+        addPresentationToCart(
+          data.product_id,
+          data.product_name,
+          data.presentation.id,
+          data.presentation.presentation_name,
+          data.presentation.quantity,
+          data.presentation.sale_price,
+          data.base_stock
+        );
+      } else {
+        // Tiene múltiples presentaciones, mostrar modal
+        setCurrentProductPresentations(data);
+        setShowPresentationsModal(true);
+      }
+    } catch (error) {
       console.log("🔎 Código no encontrado:", code);
+      
+      // Fallback: buscar en productos locales (por si no tiene presentaciones)
+      const found =
+        products.find((p) => String(p.barcode || "").trim() === code) ||
+        products.find((p) => String(p.sku || "").trim() === code);
+
+      if (found) {
+        addProduct(found);
+      }
     }
   };
 
@@ -133,27 +164,76 @@ export default function Venta({ cashDrawer, onCashClosed }) {
     return Number(product?.current_stock || 0) - inCart;
   };
 
+  // ✅ NUEVO: Agregar presentación al carrito
+  const addPresentationToCart = (productId, productName, presentationId, presentationName, quantity, price, baseStock) => {
+    // Verificar stock disponible
+    const totalUnitsInCart = cart
+      .filter(item => item.product_id === productId)
+      .reduce((sum, item) => sum + (item.units_per_item * item.qty), 0);
+    
+    const availableUnits = baseStock - totalUnitsInCart;
+    
+    if (availableUnits < quantity) {
+      alert(`Stock insuficiente. Disponible: ${availableUnits} unidades`);
+      return;
+    }
+
+    // Crear un ID único para esta presentación en el carrito
+    const cartItemId = `${productId}-${presentationId}`;
+
+    setCart((prev) => {
+      const found = prev.find((item) => item.cart_id === cartItemId);
+      
+      if (found) {
+        // Ya existe, aumentar cantidad
+        return prev.map((item) =>
+          item.cart_id === cartItemId ? { ...item, qty: item.qty + 1 } : item
+        );
+      } else {
+        // Agregar nuevo
+        return [
+          ...prev,
+          {
+            cart_id: cartItemId,
+            product_id: productId,
+            presentation_id: presentationId,
+            name: `${productName} - ${presentationName}`,
+            sale_price: price,
+            units_per_item: quantity, // Cuántas unidades base tiene esta presentación
+            qty: 1,
+            is_presentation: true
+          }
+        ];
+      }
+    });
+
+    // Cerrar modal si estaba abierto
+    setShowPresentationsModal(false);
+    setCurrentProductPresentations(null);
+  };
+
+  // Función original para productos sin presentaciones
   const addProduct = (p) => {
     if (getAvailableStock(p) <= 0) return;
     setCart((prev) => {
-      const found = prev.find((item) => item.id === p.id);
+      const found = prev.find((item) => item.id === p.id && !item.is_presentation);
       return found
         ? prev.map((item) =>
-            item.id === p.id ? { ...item, qty: item.qty + 1 } : item
+            item.id === p.id && !item.is_presentation ? { ...item, qty: item.qty + 1 } : item
           )
-        : [...prev, { ...p, qty: 1 }];
+        : [...prev, { ...p, qty: 1, is_presentation: false }];
     });
   };
 
-  const increaseQty = (id) =>
+  const increaseQty = (cartId) =>
     setCart((prev) =>
-      prev.map((p) => (p.id === id ? { ...p, qty: p.qty + 1 } : p))
+      prev.map((p) => (p.cart_id === cartId || p.id === cartId ? { ...p, qty: p.qty + 1 } : p))
     );
 
-  const decreaseQty = (id) =>
+  const decreaseQty = (cartId) =>
     setCart((prev) =>
       prev
-        .map((p) => (p.id === id ? { ...p, qty: p.qty - 1 } : p))
+        .map((p) => (p.cart_id === cartId || p.id === cartId ? { ...p, qty: p.qty - 1 } : p))
         .filter((p) => p.qty > 0)
     );
 
@@ -218,11 +298,9 @@ export default function Venta({ cashDrawer, onCashClosed }) {
 
     try {
       if (isElectron) {
-        // Electron - Impresión directa
         console.log("🖨 Imprimiendo en Electron...");
         await window.electronAPI.printTicket(ticket);
       } else {
-        // WEB - Impresión con diálogo
         const ticketHTML = `
           <div style="width:58mm;font-family:monospace;font-size:10px;font-weight:900;padding:2mm;">
             <div style="text-align:center;font-size:18px;">DYNATOS</div>
@@ -293,10 +371,27 @@ export default function Venta({ cashDrawer, onCashClosed }) {
           clientName.trim() + (clientDoc.trim() ? ` | ${clientDoc.trim()}` : "");
       }
 
+      // ✅ MODIFICADO: Manejar presentaciones en la venta
+      const items = cart.map((i) => {
+        if (i.is_presentation) {
+          // Para presentaciones, enviar la cantidad de unidades base
+          return {
+            product_id: i.product_id,
+            quantity: i.units_per_item * i.qty // Multiplicar por las unidades que representa
+          };
+        } else {
+          // Para productos normales
+          return {
+            product_id: i.id,
+            quantity: i.qty
+          };
+        }
+      });
+
       const res = await api.post("/sales", {
         cash_drawer_id: cashDrawer.id,
         customer_name: nameToSend,
-        items: cart.map((i) => ({ product_id: i.id, quantity: i.qty }))
+        items: items
       });
 
       setSale(res.data.sale);
@@ -450,21 +545,31 @@ export default function Venta({ cashDrawer, onCashClosed }) {
         </div>
 
         <div style={{ flex: 1, overflowY: "auto", padding: "20px" }}>
-          {cart.map((i) => (
-            <div key={i.id} style={{ display: "flex", justifyContent: "space-between", marginBottom: "15px", fontSize: "0.9rem", color: "#eee" }}>
-              <div style={{ flex: 1 }}>{i.name}</div>
-              <div style={{ display: "flex", alignItems: "center", gap: "8px", margin: "0 10px" }}>
-                <button onClick={() => decreaseQty(i.id)} style={{ background: "#222", border: "none", color: "#fff", width: "24px", cursor: "pointer", borderRadius: "4px" }}>
-                  -
-                </button>
-                <span>{i.qty}</span>
-                <button onClick={() => increaseQty(i.id)} style={{ background: "#222", border: "none", color: "#fff", width: "24px", cursor: "pointer", borderRadius: "4px" }}>
-                  +
-                </button>
+          {cart.map((i) => {
+            const itemId = i.cart_id || i.id;
+            return (
+              <div key={itemId} style={{ display: "flex", justifyContent: "space-between", marginBottom: "15px", fontSize: "0.9rem", color: "#eee" }}>
+                <div style={{ flex: 1 }}>
+                  {i.name}
+                  {i.is_presentation && (
+                    <div style={{ fontSize: "0.7rem", color: "#2ecc71", marginTop: "2px" }}>
+                      <FiPackage size={10} style={{ verticalAlign: "middle" }} /> {i.units_per_item}u
+                    </div>
+                  )}
+                </div>
+                <div style={{ display: "flex", alignItems: "center", gap: "8px", margin: "0 10px" }}>
+                  <button onClick={() => decreaseQty(itemId)} style={{ background: "#222", border: "none", color: "#fff", width: "24px", cursor: "pointer", borderRadius: "4px" }}>
+                    -
+                  </button>
+                  <span>{i.qty}</span>
+                  <button onClick={() => increaseQty(itemId)} style={{ background: "#222", border: "none", color: "#fff", width: "24px", cursor: "pointer", borderRadius: "4px" }}>
+                    +
+                  </button>
+                </div>
+                <div style={{ color: "#D4AF37" }}>${(i.qty * i.sale_price).toLocaleString()}</div>
               </div>
-              <div style={{ color: "#D4AF37" }}>${(i.qty * i.sale_price).toLocaleString()}</div>
-            </div>
-          ))}
+            );
+          })}
         </div>
 
         <div style={{ padding: "25px", backgroundColor: "#000", borderTop: "1px solid #333" }}>
@@ -574,6 +679,87 @@ export default function Venta({ cashDrawer, onCashClosed }) {
           )}
         </div>
       </div>
+
+      {/* ✅ MODAL DE SELECCIÓN DE PRESENTACIONES */}
+      {showPresentationsModal && currentProductPresentations && (
+        <div style={{ position: "fixed", inset: 0, background: "rgba(0,0,0,0.95)", display: "flex", alignItems: "center", justifyContent: "center", zIndex: 200, backdropFilter: "blur(10px)" }}>
+          <div style={{ background: "#0a0a0a", maxWidth: "600px", width: "90%", padding: "40px", borderRadius: "30px", border: "2px solid #D4AF37", maxHeight: "80vh", overflowY: "auto" }}>
+            
+            <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: "30px" }}>
+              <div>
+                <h2 style={{ color: "#D4AF37", margin: 0, fontSize: "1.8rem" }}>
+                  {currentProductPresentations.product_name}
+                </h2>
+                <p style={{ color: "#666", margin: "5px 0 0 0" }}>
+                  Stock disponible: <span style={{ color: "#2ecc71", fontWeight: "bold" }}>{currentProductPresentations.base_stock}</span> unidades
+                </p>
+              </div>
+              <button 
+                onClick={() => {
+                  setShowPresentationsModal(false);
+                  setCurrentProductPresentations(null);
+                }}
+                style={{ background: "#222", border: "none", borderRadius: "50%", width: "45px", height: "45px", cursor: "pointer", display: "flex", alignItems: "center", justifyContent: "center" }}
+              >
+                <FiX size={24} color="#fff" />
+              </button>
+            </div>
+
+            <h3 style={{ color: "#888", fontSize: "1rem", marginBottom: "20px", textTransform: "uppercase", letterSpacing: "1px" }}>
+              ¿Cómo lo vendes?
+            </h3>
+
+            <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(200px, 1fr))", gap: "20px" }}>
+              {currentProductPresentations.presentations.map((pres) => (
+                <button
+                  key={pres.id}
+                  onClick={() => addPresentationToCart(
+                    currentProductPresentations.product_id,
+                    currentProductPresentations.product_name,
+                    pres.id,
+                    pres.presentation_name,
+                    pres.quantity,
+                    pres.sale_price,
+                    currentProductPresentations.base_stock
+                  )}
+                  style={{
+                    background: "linear-gradient(135deg, #1a1a1a 0%, #0a0a0a 100%)",
+                    border: "2px solid #D4AF37",
+                    borderRadius: "20px",
+                    padding: "30px 20px",
+                    cursor: "pointer",
+                    transition: "all 0.3s",
+                    textAlign: "center"
+                  }}
+                  onMouseEnter={(e) => {
+                    e.currentTarget.style.transform = "scale(1.05)";
+                    e.currentTarget.style.borderColor = "#FFD700";
+                  }}
+                  onMouseLeave={(e) => {
+                    e.currentTarget.style.transform = "scale(1)";
+                    e.currentTarget.style.borderColor = "#D4AF37";
+                  }}
+                >
+                  <div style={{ fontSize: "1.4rem", fontWeight: "bold", color: "#D4AF37", marginBottom: "10px" }}>
+                    {pres.presentation_name}
+                  </div>
+                  
+                  <div style={{ display: "flex", alignItems: "center", justifyContent: "center", gap: "8px", color: "#2ecc71", marginBottom: "15px" }}>
+                    <FiPackage size={20} />
+                    <span style={{ fontSize: "1.1rem", fontWeight: "bold" }}>
+                      {pres.quantity} {pres.quantity === 1 ? 'unidad' : 'unidades'}
+                    </span>
+                  </div>
+
+                  <div style={{ fontSize: "2rem", fontWeight: "bold", color: "#fff" }}>
+                    ${Number(pres.sale_price).toLocaleString()}
+                  </div>
+                </button>
+              ))}
+            </div>
+          </div>
+        </div>
+      )}
 
       {showQRConfirm && (
         <div style={{ position: "fixed", inset: 0, background: "rgba(0,0,0,0.9)", display: "flex", alignItems: "center", justifyContent: "center", zIndex: 100 }}>
