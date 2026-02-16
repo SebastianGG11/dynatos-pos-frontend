@@ -159,9 +159,21 @@ export default function Venta({ cashDrawer, onCashClosed }) {
       ? products
       : products.filter((p) => p.category_id === selectedCategory);
 
+  // ✅ CORREGIDO: Cuenta tanto productos normales como presentaciones
   const getAvailableStock = (product) => {
-    const inCart = cart.find((i) => i.id === product?.id)?.qty || 0;
-    return Number(product?.current_stock || 0) - inCart;
+    // Contar unidades en el carrito (productos normales)
+    const normalInCart = cart
+      .filter((i) => i.id === product?.id && !i.is_presentation)
+      .reduce((sum, i) => sum + i.qty, 0);
+    
+    // Contar unidades en el carrito (presentaciones)
+    const presentationsInCart = cart
+      .filter((i) => i.product_id === product?.id && i.is_presentation)
+      .reduce((sum, i) => sum + (i.units_per_item * i.qty), 0);
+    
+    const totalInCart = normalInCart + presentationsInCart;
+    
+    return Number(product?.current_stock || 0) - totalInCart;
   };
 
   // ✅ NUEVO: Agregar presentación al carrito
@@ -212,40 +224,39 @@ export default function Venta({ cashDrawer, onCashClosed }) {
     setCurrentProductPresentations(null);
   };
 
-  // Función original para productos sin presentaciones
-// ✅ MEJORADO: Buscar presentaciones también al hacer clic
+  // ✅ MEJORADO: Buscar presentaciones también al hacer clic
   const addProduct = async (p) => {
     if (getAvailableStock(p) <= 0) return;
 
-  // Intentar buscar presentaciones del producto
+    // Intentar buscar presentaciones del producto
     try {
       const res = await api.get(`/presentations/${p.id}/presentations`);
       const presentations = res.data.items || [];
 
       if (presentations.length === 0) {
-      // No tiene presentaciones, agregar normalmente
+        // No tiene presentaciones, agregar normalmente
         setCart((prev) => {
           const found = prev.find((item) => item.id === p.id && !item.is_presentation);
           return found
             ? prev.map((item) =>
-              item.id === p.id && !item.is_presentation ? { ...item, qty: item.qty + 1 } : item
-             )
+                item.id === p.id && !item.is_presentation ? { ...item, qty: item.qty + 1 } : item
+              )
             : [...prev, { ...p, qty: 1, is_presentation: false }];
         });
       } else if (presentations.length === 1) {
-      // Una sola presentación, agregar directamente
+        // Una sola presentación, agregar directamente
         const pres = presentations[0];
         addPresentationToCart(
-         p.id,
-         p.name,
+          p.id,
+          p.name,
           pres.id,
           pres.name,
           pres.quantity,
           pres.sale_price,
           p.current_stock
-       );
+        );
       } else {
-      // Múltiples presentaciones, mostrar modal
+        // Múltiples presentaciones, mostrar modal
         setCurrentProductPresentations({
           product_id: p.id,
           product_name: p.name,
@@ -260,21 +271,21 @@ export default function Venta({ cashDrawer, onCashClosed }) {
             sale_price: pr.sale_price
           }))
         });
-       setShowPresentationsModal(true);
+        setShowPresentationsModal(true);
       }
     } catch (error) {
-     // Error obteniendo presentaciones, agregar como producto normal
-     console.log("No se encontraron presentaciones, agregando como producto normal");
-     setCart((prev) => {
-       const found = prev.find((item) => item.id === p.id && !item.is_presentation);
-       return found
-         ? prev.map((item) =>
-             item.id === p.id && !item.is_presentation ? { ...item, qty: item.qty + 1 } : item
-           )
-         : [...prev, { ...p, qty: 1, is_presentation: false }];
-     });
-   }
-  };;
+      // Error obteniendo presentaciones, agregar como producto normal
+      console.log("No se encontraron presentaciones, agregando como producto normal");
+      setCart((prev) => {
+        const found = prev.find((item) => item.id === p.id && !item.is_presentation);
+        return found
+          ? prev.map((item) =>
+              item.id === p.id && !item.is_presentation ? { ...item, qty: item.qty + 1 } : item
+            )
+          : [...prev, { ...p, qty: 1, is_presentation: false }];
+      });
+    }
+  };
 
   const increaseQty = (cartId) =>
     setCart((prev) =>
@@ -365,7 +376,7 @@ export default function Venta({ cashDrawer, onCashClosed }) {
             <div style="border-top:2px dashed #000;margin:2mm 0;"></div>
             ${ticket.items.map(i => `
               <div style="margin:2mm 0;">
-                <div>${i.qty} x ${i.name.substring(0, 20)}</div>
+                <div style="word-wrap:break-word;max-width:50mm;">${i.qty} x ${i.name}</div>
                 <div style="text-align:right;font-size:10px;">$${(i.qty * i.sale_price).toLocaleString()}</div>
               </div>
             `).join('')}
