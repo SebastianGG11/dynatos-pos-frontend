@@ -22,7 +22,6 @@ export default function Venta({ cashDrawer, onCashClosed }) {
   const [showQRConfirm, setShowQRConfirm] = useState(false);
   const [showCloseCash, setShowCloseCash] = useState(false);
 
-  // ✅ NUEVO: Estados para presentaciones
   const [showPresentationsModal, setShowPresentationsModal] = useState(false);
   const [currentProductPresentations, setCurrentProductPresentations] = useState(null);
 
@@ -44,18 +43,15 @@ export default function Venta({ cashDrawer, onCashClosed }) {
     return tag === "input" || tag === "textarea" || el.isContentEditable;
   };
 
-  // ✅ MODIFICADO: Ahora busca presentaciones por código de barras
   const handleBarcodeScan = async (codeRaw) => {
     const code = String(codeRaw || "").trim();
     if (!code) return;
 
     try {
-      // Buscar presentaciones por código de barras
       const res = await api.get(`/presentations/search?q=${code}`);
       const data = res.data;
 
       if (data.single_presentation) {
-        // Solo tiene una presentación, agregar directamente
         addPresentationToCart(
           data.product_id,
           data.product_name,
@@ -66,14 +62,11 @@ export default function Venta({ cashDrawer, onCashClosed }) {
           data.base_stock
         );
       } else {
-        // Tiene múltiples presentaciones, mostrar modal
         setCurrentProductPresentations(data);
         setShowPresentationsModal(true);
       }
     } catch (error) {
       console.log("🔎 Código no encontrado:", code);
-      
-      // Fallback: buscar en productos locales (por si no tiene presentaciones)
       const found =
         products.find((p) => String(p.barcode || "").trim() === code) ||
         products.find((p) => String(p.sku || "").trim() === code);
@@ -159,14 +152,11 @@ export default function Venta({ cashDrawer, onCashClosed }) {
       ? products
       : products.filter((p) => p.category_id === selectedCategory);
 
-  // ✅ CORREGIDO: Cuenta tanto productos normales como presentaciones
   const getAvailableStock = (product) => {
-    // Contar unidades en el carrito (productos normales)
     const normalInCart = cart
       .filter((i) => i.id === product?.id && !i.is_presentation)
       .reduce((sum, i) => sum + i.qty, 0);
     
-    // Contar unidades en el carrito (presentaciones)
     const presentationsInCart = cart
       .filter((i) => i.product_id === product?.id && i.is_presentation)
       .reduce((sum, i) => sum + (i.units_per_item * i.qty), 0);
@@ -176,9 +166,7 @@ export default function Venta({ cashDrawer, onCashClosed }) {
     return Number(product?.current_stock || 0) - totalInCart;
   };
 
-  // ✅ NUEVO: Agregar presentación al carrito
   const addPresentationToCart = (productId, productName, presentationId, presentationName, quantity, price, baseStock) => {
-    // Verificar stock disponible
     const totalUnitsInCart = cart
       .filter(item => item.product_id === productId)
       .reduce((sum, item) => sum + (item.units_per_item * item.qty), 0);
@@ -190,19 +178,16 @@ export default function Venta({ cashDrawer, onCashClosed }) {
       return;
     }
 
-    // Crear un ID único para esta presentación en el carrito
     const cartItemId = `${productId}-${presentationId}`;
 
     setCart((prev) => {
       const found = prev.find((item) => item.cart_id === cartItemId);
       
       if (found) {
-        // Ya existe, aumentar cantidad
         return prev.map((item) =>
           item.cart_id === cartItemId ? { ...item, qty: item.qty + 1 } : item
         );
       } else {
-        // Agregar nuevo
         return [
           ...prev,
           {
@@ -211,7 +196,7 @@ export default function Venta({ cashDrawer, onCashClosed }) {
             presentation_id: presentationId,
             name: `${productName} - ${presentationName}`,
             sale_price: price,
-            units_per_item: quantity, // Cuántas unidades base tiene esta presentación
+            units_per_item: quantity,
             qty: 1,
             is_presentation: true
           }
@@ -219,22 +204,18 @@ export default function Venta({ cashDrawer, onCashClosed }) {
       }
     });
 
-    // Cerrar modal si estaba abierto
     setShowPresentationsModal(false);
     setCurrentProductPresentations(null);
   };
 
-  // ✅ MEJORADO: Buscar presentaciones también al hacer clic
   const addProduct = async (p) => {
     if (getAvailableStock(p) <= 0) return;
 
-    // Intentar buscar presentaciones del producto
     try {
       const res = await api.get(`/presentations/${p.id}/presentations`);
       const presentations = res.data.items || [];
 
       if (presentations.length === 0) {
-        // No tiene presentaciones, agregar normalmente
         setCart((prev) => {
           const found = prev.find((item) => item.id === p.id && !item.is_presentation);
           return found
@@ -244,7 +225,6 @@ export default function Venta({ cashDrawer, onCashClosed }) {
             : [...prev, { ...p, qty: 1, is_presentation: false }];
         });
       } else if (presentations.length === 1) {
-        // Una sola presentación, agregar directamente
         const pres = presentations[0];
         addPresentationToCart(
           p.id,
@@ -256,7 +236,6 @@ export default function Venta({ cashDrawer, onCashClosed }) {
           p.current_stock
         );
       } else {
-        // Múltiples presentaciones, mostrar modal
         setCurrentProductPresentations({
           product_id: p.id,
           product_name: p.name,
@@ -274,7 +253,6 @@ export default function Venta({ cashDrawer, onCashClosed }) {
         setShowPresentationsModal(true);
       }
     } catch (error) {
-      // Error obteniendo presentaciones, agregar como producto normal
       console.log("No se encontraron presentaciones, agregando como producto normal");
       setCart((prev) => {
         const found = prev.find((item) => item.id === p.id && !item.is_presentation);
@@ -408,7 +386,6 @@ export default function Venta({ cashDrawer, onCashClosed }) {
         setTimeout(() => {
           printWindow.focus();
           printWindow.print();
-          
           setTimeout(() => {
             printWindow.close();
           }, 1000);
@@ -425,6 +402,7 @@ export default function Venta({ cashDrawer, onCashClosed }) {
     }, 1000);
   };
 
+  // ✅ CORREGIDO: Enviar precio de presentación al backend
   const createSale = async () => {
     try {
       let nameToSend = "CLIENTE GENERAL";
@@ -433,16 +411,14 @@ export default function Venta({ cashDrawer, onCashClosed }) {
           clientName.trim() + (clientDoc.trim() ? ` | ${clientDoc.trim()}` : "");
       }
 
-      // ✅ MODIFICADO: Manejar presentaciones en la venta
       const items = cart.map((i) => {
         if (i.is_presentation) {
-          // Para presentaciones, enviar la cantidad de unidades base
           return {
             product_id: i.product_id,
-            quantity: i.units_per_item * i.qty // Multiplicar por las unidades que representa
+            quantity: i.units_per_item * i.qty,
+            unit_price_override: i.sale_price / i.units_per_item  // ✅ Precio por unidad de stock
           };
         } else {
-          // Para productos normales
           return {
             product_id: i.id,
             quantity: i.qty
@@ -742,7 +718,7 @@ export default function Venta({ cashDrawer, onCashClosed }) {
         </div>
       </div>
 
-      {/* ✅ MODAL DE SELECCIÓN DE PRESENTACIONES */}
+      {/* MODAL DE SELECCIÓN DE PRESENTACIONES */}
       {showPresentationsModal && currentProductPresentations && (
         <div style={{ position: "fixed", inset: 0, background: "rgba(0,0,0,0.95)", display: "flex", alignItems: "center", justifyContent: "center", zIndex: 200, backdropFilter: "blur(10px)" }}>
           <div style={{ background: "#0a0a0a", maxWidth: "600px", width: "90%", padding: "40px", borderRadius: "30px", border: "2px solid #D4AF37", maxHeight: "80vh", overflowY: "auto" }}>
