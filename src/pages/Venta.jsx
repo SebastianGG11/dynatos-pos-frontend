@@ -8,33 +8,57 @@ import {
   FiCheckSquare,
   FiSquare,
   FiPackage,
-  FiX
+  FiX,
+  FiPlus
 } from "react-icons/fi";
 
 export default function Venta({ cashDrawer, onCashClosed }) {
   const [products, setProducts] = useState([]);
   const [categories, setCategories] = useState([]);
   const [selectedCategory, setSelectedCategory] = useState("ALL");
-  const [cart, setCart] = useState([]);
-  const [sale, setSale] = useState(null);
-  const [preview, setPreview] = useState(null);
-  const [cashReceived, setCashReceived] = useState("");
+  
+  // ✅ NUEVO: Sistema de múltiples ventas
+  const [sales, setSales] = useState([
+    {
+      id: 1,
+      cart: [],
+      sale: null,
+      preview: null,
+      cashReceived: "",
+      isCustomClient: false,
+      clientName: "",
+      clientDoc: ""
+    }
+  ]);
+  const [activeSaleId, setActiveSaleId] = useState(1);
+  const [nextSaleId, setNextSaleId] = useState(2);
+
   const [showQRConfirm, setShowQRConfirm] = useState(false);
   const [showCloseCash, setShowCloseCash] = useState(false);
-
   const [showPresentationsModal, setShowPresentationsModal] = useState(false);
   const [currentProductPresentations, setCurrentProductPresentations] = useState(null);
-
-  const [isCustomClient, setIsCustomClient] = useState(false);
-  const [clientName, setClientName] = useState("");
-  const [clientDoc, setClientDoc] = useState("");
-
   const [usuarioActual, setUsuarioActual] = useState("Cajero");
 
   const isElectron = typeof window !== 'undefined' && window.electronAPI;
-
   const scanBufferRef = useRef("");
   const lastKeyTimeRef = useRef(0);
+
+  // ✅ Helper: Obtener venta activa
+  const activeSale = sales.find(s => s.id === activeSaleId);
+  const cart = activeSale?.cart || [];
+  const sale = activeSale?.sale || null;
+  const preview = activeSale?.preview || null;
+  const cashReceived = activeSale?.cashReceived || "";
+  const isCustomClient = activeSale?.isCustomClient || false;
+  const clientName = activeSale?.clientName || "";
+  const clientDoc = activeSale?.clientDoc || "";
+
+  // ✅ Helper: Actualizar venta activa
+  const updateActiveSale = (updates) => {
+    setSales(prev => prev.map(s => 
+      s.id === activeSaleId ? { ...s, ...updates } : s
+    ));
+  };
 
   const isEditableElement = () => {
     const el = document.activeElement;
@@ -152,26 +176,36 @@ export default function Venta({ cashDrawer, onCashClosed }) {
       ? products
       : products.filter((p) => p.category_id === selectedCategory);
 
+  // ✅ MODIFICADO: Stock compartido entre TODAS las ventas
   const getAvailableStock = (product) => {
-    const normalInCart = cart
-      .filter((i) => i.id === product?.id && !i.is_presentation)
-      .reduce((sum, i) => sum + i.qty, 0);
+    let totalInAllCarts = 0;
+
+    // Contar en TODAS las ventas
+    sales.forEach(saleObj => {
+      const normalInCart = saleObj.cart
+        .filter((i) => i.id === product?.id && !i.is_presentation)
+        .reduce((sum, i) => sum + i.qty, 0);
+      
+      const presentationsInCart = saleObj.cart
+        .filter((i) => i.product_id === product?.id && i.is_presentation)
+        .reduce((sum, i) => sum + (i.units_per_item * i.qty), 0);
+      
+      totalInAllCarts += normalInCart + presentationsInCart;
+    });
     
-    const presentationsInCart = cart
-      .filter((i) => i.product_id === product?.id && i.is_presentation)
-      .reduce((sum, i) => sum + (i.units_per_item * i.qty), 0);
-    
-    const totalInCart = normalInCart + presentationsInCart;
-    
-    return Number(product?.current_stock || 0) - totalInCart;
+    return Number(product?.current_stock || 0) - totalInAllCarts;
   };
 
   const addPresentationToCart = (productId, productName, presentationId, presentationName, quantity, price, baseStock) => {
-    const totalUnitsInCart = cart
-      .filter(item => item.product_id === productId)
-      .reduce((sum, item) => sum + (item.units_per_item * item.qty), 0);
+    // Verificar stock en TODAS las ventas
+    let totalUnitsInAllCarts = 0;
+    sales.forEach(saleObj => {
+      totalUnitsInAllCarts += saleObj.cart
+        .filter(item => item.product_id === productId)
+        .reduce((sum, item) => sum + (item.units_per_item * item.qty), 0);
+    });
     
-    const availableUnits = baseStock - totalUnitsInCart;
+    const availableUnits = baseStock - totalUnitsInAllCarts;
     
     if (availableUnits < quantity) {
       alert(`Stock insuficiente. Disponible: ${availableUnits} unidades`);
@@ -180,28 +214,30 @@ export default function Venta({ cashDrawer, onCashClosed }) {
 
     const cartItemId = `${productId}-${presentationId}`;
 
-    setCart((prev) => {
-      const found = prev.find((item) => item.cart_id === cartItemId);
-      
-      if (found) {
-        return prev.map((item) =>
-          item.cart_id === cartItemId ? { ...item, qty: item.qty + 1 } : item
-        );
-      } else {
-        return [
-          ...prev,
-          {
-            cart_id: cartItemId,
-            product_id: productId,
-            presentation_id: presentationId,
-            name: `${productName} - ${presentationName}`,
-            sale_price: price,
-            units_per_item: quantity,
-            qty: 1,
-            is_presentation: true
-          }
-        ];
-      }
+    updateActiveSale({
+      cart: (() => {
+        const found = cart.find((item) => item.cart_id === cartItemId);
+        
+        if (found) {
+          return cart.map((item) =>
+            item.cart_id === cartItemId ? { ...item, qty: item.qty + 1 } : item
+          );
+        } else {
+          return [
+            ...cart,
+            {
+              cart_id: cartItemId,
+              product_id: productId,
+              presentation_id: presentationId,
+              name: `${productName} - ${presentationName}`,
+              sale_price: price,
+              units_per_item: quantity,
+              qty: 1,
+              is_presentation: true
+            }
+          ];
+        }
+      })()
     });
 
     setShowPresentationsModal(false);
@@ -216,13 +252,15 @@ export default function Venta({ cashDrawer, onCashClosed }) {
       const presentations = res.data.items || [];
 
       if (presentations.length === 0) {
-        setCart((prev) => {
-          const found = prev.find((item) => item.id === p.id && !item.is_presentation);
-          return found
-            ? prev.map((item) =>
-                item.id === p.id && !item.is_presentation ? { ...item, qty: item.qty + 1 } : item
-              )
-            : [...prev, { ...p, qty: 1, is_presentation: false }];
+        updateActiveSale({
+          cart: (() => {
+            const found = cart.find((item) => item.id === p.id && !item.is_presentation);
+            return found
+              ? cart.map((item) =>
+                  item.id === p.id && !item.is_presentation ? { ...item, qty: item.qty + 1 } : item
+                )
+              : [...cart, { ...p, qty: 1, is_presentation: false }];
+          })()
         });
       } else if (presentations.length === 1) {
         const pres = presentations[0];
@@ -254,50 +292,89 @@ export default function Venta({ cashDrawer, onCashClosed }) {
       }
     } catch (error) {
       console.log("No se encontraron presentaciones, agregando como producto normal");
-      setCart((prev) => {
-        const found = prev.find((item) => item.id === p.id && !item.is_presentation);
-        return found
-          ? prev.map((item) =>
-              item.id === p.id && !item.is_presentation ? { ...item, qty: item.qty + 1 } : item
-            )
-          : [...prev, { ...p, qty: 1, is_presentation: false }];
+      updateActiveSale({
+        cart: (() => {
+          const found = cart.find((item) => item.id === p.id && !item.is_presentation);
+          return found
+            ? cart.map((item) =>
+                item.id === p.id && !item.is_presentation ? { ...item, qty: item.qty + 1 } : item
+              )
+            : [...cart, { ...p, qty: 1, is_presentation: false }];
+        })()
       });
     }
   };
 
-  const increaseQty = (cartId) =>
-    setCart((prev) =>
-      prev.map((p) => (p.cart_id === cartId || p.id === cartId ? { ...p, qty: p.qty + 1 } : p))
-    );
+  const increaseQty = (cartId) => {
+    updateActiveSale({
+      cart: cart.map((p) => (p.cart_id === cartId || p.id === cartId ? { ...p, qty: p.qty + 1 } : p))
+    });
+  };
 
-  const decreaseQty = (cartId) =>
-    setCart((prev) =>
-      prev
+  const decreaseQty = (cartId) => {
+    updateActiveSale({
+      cart: cart
         .map((p) => (p.cart_id === cartId || p.id === cartId ? { ...p, qty: p.qty - 1 } : p))
         .filter((p) => p.qty > 0)
-    );
+    });
+  };
 
   const clearCart = () => {
-    setCart([]);
-    setSale(null);
-    setPreview(null);
-    setCashReceived("");
-    setIsCustomClient(false);
-    setClientName("");
-    setClientDoc("");
+    updateActiveSale({
+      cart: [],
+      sale: null,
+      preview: null,
+      cashReceived: "",
+      isCustomClient: false,
+      clientName: "",
+      clientDoc: ""
+    });
+  };
+
+  // ✅ NUEVO: Crear nueva venta
+  const createNewSale = () => {
+    const newSale = {
+      id: nextSaleId,
+      cart: [],
+      sale: null,
+      preview: null,
+      cashReceived: "",
+      isCustomClient: false,
+      clientName: "",
+      clientDoc: ""
+    };
+    setSales(prev => [...prev, newSale]);
+    setActiveSaleId(nextSaleId);
+    setNextSaleId(prev => prev + 1);
+  };
+
+  // ✅ NUEVO: Cerrar venta sin cobrar
+  const closeSale = (saleId) => {
+    if (sales.length === 1) {
+      // Si es la última, solo limpiarla
+      clearCart();
+    } else {
+      // Eliminar la venta
+      setSales(prev => prev.filter(s => s.id !== saleId));
+      // Si estaba activa, cambiar a la primera disponible
+      if (activeSaleId === saleId) {
+        const remaining = sales.filter(s => s.id !== saleId);
+        setActiveSaleId(remaining[0].id);
+      }
+    }
   };
 
   useEffect(() => {
     if (!cashDrawer?.id) return;
     if (cart.length === 0) {
-      setPreview(null);
+      updateActiveSale({ preview: null });
       return;
     }
     const totalLocal = cart.reduce(
       (sum, i) => sum + Number(i.sale_price) * i.qty,
       0
     );
-    setPreview({ total: totalLocal });
+    updateActiveSale({ preview: { total: totalLocal } });
   }, [cart, cashDrawer?.id]);
 
   const total =
@@ -397,12 +474,11 @@ export default function Venta({ cashDrawer, onCashClosed }) {
     }
 
     setTimeout(() => {
-      clearCart();
+      closeSale(activeSaleId); // Cerrar la venta actual después del pago
       loadAll();
     }, 1000);
   };
 
-  // ✅ CORREGIDO: Enviar precio de presentación al backend
   const createSale = async () => {
     try {
       let nameToSend = "CLIENTE GENERAL";
@@ -416,7 +492,7 @@ export default function Venta({ cashDrawer, onCashClosed }) {
           return {
             product_id: i.product_id,
             quantity: i.units_per_item * i.qty,
-            unit_price_override: i.sale_price / i.units_per_item  // ✅ Precio por unidad de stock
+            unit_price_override: i.sale_price / i.units_per_item
           };
         } else {
           return {
@@ -432,7 +508,7 @@ export default function Venta({ cashDrawer, onCashClosed }) {
         items: items
       });
 
-      setSale(res.data.sale);
+      updateActiveSale({ sale: res.data.sale });
     } catch {
       alert("Error al registrar venta.");
     }
@@ -547,39 +623,127 @@ export default function Venta({ cashDrawer, onCashClosed }) {
       </div>
 
       {/* PRODUCTOS */}
-      <div style={{ flex: 1, padding: "30px", overflowY: "auto" }}>
-        <h1 style={{ color: "#D4AF37", fontFamily: "serif", margin: "0 0 30px 0", borderBottom: "1px solid #222", paddingBottom: "15px" }}>
-          PRODUCTOS
-        </h1>
-        <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fill, minmax(180px, 1fr))", gap: "15px" }}>
-          {filteredProducts.map((p) => (
-            <button
-              key={p.id}
-              onClick={() => addProduct(p)}
-              disabled={getAvailableStock(p) <= 0}
+      <div style={{ flex: 1, display: "flex", flexDirection: "column" }}>
+        
+        {/* ✅ TABS DE VENTAS */}
+        <div style={{ borderBottom: "1px solid #222", background: "#050505", padding: "10px 20px", display: "flex", gap: "10px", overflowX: "auto" }}>
+          {sales.map((s) => (
+            <div
+              key={s.id}
+              onClick={() => setActiveSaleId(s.id)}
               style={{
-                background: "#111",
-                border: "1px solid #222",
-                padding: "15px",
-                borderRadius: "12px",
-                textAlign: "left",
-                cursor: "pointer",
                 position: "relative",
-                overflow: "hidden"
+                padding: "10px 15px",
+                borderRadius: "8px 8px 0 0",
+                background: activeSaleId === s.id ? "#D4AF37" : "#111",
+                color: activeSaleId === s.id ? "#000" : "#fff",
+                cursor: "pointer",
+                display: "flex",
+                alignItems: "center",
+                gap: "10px",
+                minWidth: "120px",
+                fontWeight: "bold",
+                fontSize: "0.9rem",
+                border: activeSaleId === s.id ? "2px solid #D4AF37" : "1px solid #333",
+                borderBottom: "none"
               }}
             >
-              <div style={{ fontWeight: "bold", fontSize: "0.9rem", color: "#fff", marginBottom: "5px" }}>{p.name}</div>
-              <div style={{ color: "#D4AF37", fontWeight: "bold", fontSize: "1.1rem" }}>${Number(p.sale_price).toLocaleString()}</div>
-              <div style={{ fontSize: "0.7rem", color: "#666", marginTop: "5px" }}>Stock: {getAvailableStock(p)}</div>
-            </button>
+              <FiShoppingCart size={16} />
+              <span>Venta {s.id}</span>
+              {s.cart.length > 0 && (
+                <span style={{
+                  background: activeSaleId === s.id ? "#000" : "#D4AF37",
+                  color: activeSaleId === s.id ? "#D4AF37" : "#000",
+                  borderRadius: "50%",
+                  width: "22px",
+                  height: "22px",
+                  display: "flex",
+                  alignItems: "center",
+                  justifyContent: "center",
+                  fontSize: "0.7rem",
+                  fontWeight: "bold"
+                }}>
+                  {s.cart.length}
+                </span>
+              )}
+              {sales.length > 1 && (
+                <button
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    closeSale(s.id);
+                  }}
+                  style={{
+                    background: "transparent",
+                    border: "none",
+                    color: activeSaleId === s.id ? "#000" : "#666",
+                    cursor: "pointer",
+                    padding: "2px",
+                    display: "flex",
+                    alignItems: "center"
+                  }}
+                >
+                  <FiX size={16} />
+                </button>
+              )}
+            </div>
           ))}
+          <button
+            onClick={createNewSale}
+            style={{
+              padding: "10px 15px",
+              borderRadius: "8px 8px 0 0",
+              background: "#111",
+              color: "#D4AF37",
+              border: "1px solid #333",
+              borderBottom: "none",
+              cursor: "pointer",
+              display: "flex",
+              alignItems: "center",
+              gap: "5px",
+              fontSize: "0.9rem",
+              fontWeight: "bold"
+            }}
+          >
+            <FiPlus size={16} /> Nueva
+          </button>
+        </div>
+
+        {/* PRODUCTOS */}
+        <div style={{ flex: 1, padding: "30px", overflowY: "auto" }}>
+          <h1 style={{ color: "#D4AF37", fontFamily: "serif", margin: "0 0 30px 0", borderBottom: "1px solid #222", paddingBottom: "15px" }}>
+            PRODUCTOS
+          </h1>
+          <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fill, minmax(180px, 1fr))", gap: "15px" }}>
+            {filteredProducts.map((p) => (
+              <button
+                key={p.id}
+                onClick={() => addProduct(p)}
+                disabled={getAvailableStock(p) <= 0}
+                style={{
+                  background: "#111",
+                  border: "1px solid #222",
+                  padding: "15px",
+                  borderRadius: "12px",
+                  textAlign: "left",
+                  cursor: getAvailableStock(p) <= 0 ? "not-allowed" : "pointer",
+                  opacity: getAvailableStock(p) <= 0 ? 0.5 : 1,
+                  position: "relative",
+                  overflow: "hidden"
+                }}
+              >
+                <div style={{ fontWeight: "bold", fontSize: "0.9rem", color: "#fff", marginBottom: "5px" }}>{p.name}</div>
+                <div style={{ color: "#D4AF37", fontWeight: "bold", fontSize: "1.1rem" }}>${Number(p.sale_price).toLocaleString()}</div>
+                <div style={{ fontSize: "0.7rem", color: "#666", marginTop: "5px" }}>Stock: {getAvailableStock(p)}</div>
+              </button>
+            ))}
+          </div>
         </div>
       </div>
 
       {/* CARRITO */}
       <div style={{ width: "380px", borderLeft: "1px solid #222", display: "flex", flexDirection: "column", backgroundColor: "#080808" }}>
         <div style={{ padding: "20px", borderBottom: "1px solid #222", color: "#D4AF37", fontWeight: "bold", fontSize: "1.1rem" }}>
-          <FiShoppingCart style={{ marginRight: "8px", verticalAlign: "bottom" }} /> TICKETE ACTUAL
+          <FiShoppingCart style={{ marginRight: "8px", verticalAlign: "bottom" }} /> VENTA {activeSaleId}
         </div>
 
         <div style={{ flex: 1, overflowY: "auto", padding: "20px" }}>
@@ -627,7 +791,7 @@ export default function Venta({ cashDrawer, onCashClosed }) {
           {!sale && (
             <div style={{ marginBottom: "15px", padding: "10px", background: "#111", borderRadius: "8px", border: "1px solid #222" }}>
               <div
-                onClick={() => setIsCustomClient(!isCustomClient)}
+                onClick={() => updateActiveSale({ isCustomClient: !isCustomClient })}
                 style={{ display: "flex", alignItems: "center", gap: "10px", color: "#fff", cursor: "pointer", fontSize: "0.9rem" }}
               >
                 {isCustomClient ? <FiCheckSquare color="#D4AF37" size={20} /> : <FiSquare color="#666" size={20} />}
@@ -640,14 +804,14 @@ export default function Venta({ cashDrawer, onCashClosed }) {
                     type="text"
                     placeholder="Nombre Completo"
                     value={clientName}
-                    onChange={(e) => setClientName(e.target.value)}
+                    onChange={(e) => updateActiveSale({ clientName: e.target.value })}
                     style={{ background: "#000", border: "1px solid #333", color: "#fff", padding: "8px", borderRadius: "4px", outline: "none" }}
                   />
                   <input
                     type="text"
                     placeholder="NIT o Cédula"
                     value={clientDoc}
-                    onChange={(e) => setClientDoc(e.target.value)}
+                    onChange={(e) => updateActiveSale({ clientDoc: e.target.value })}
                     style={{ background: "#000", border: "1px solid #333", color: "#fff", padding: "8px", borderRadius: "4px", outline: "none" }}
                   />
                 </div>
@@ -662,13 +826,14 @@ export default function Venta({ cashDrawer, onCashClosed }) {
               style={{
                 width: "100%",
                 padding: "18px",
-                background: "#D4AF37",
+                background: cart.length === 0 ? "#333" : "#D4AF37",
                 border: "none",
                 borderRadius: "8px",
                 fontWeight: "bold",
                 fontSize: "1rem",
-                cursor: "pointer",
-                color: "#000"
+                cursor: cart.length === 0 ? "not-allowed" : "pointer",
+                color: "#000",
+                opacity: cart.length === 0 ? 0.5 : 1
               }}
             >
               COBRAR
@@ -679,7 +844,7 @@ export default function Venta({ cashDrawer, onCashClosed }) {
                 type="number"
                 placeholder="EFECTIVO RECIBIDO"
                 value={cashReceived}
-                onChange={(e) => setCashReceived(e.target.value)}
+                onChange={(e) => updateActiveSale({ cashReceived: e.target.value })}
                 style={{
                   width: "100%",
                   padding: "15px",
@@ -708,7 +873,7 @@ export default function Venta({ cashDrawer, onCashClosed }) {
                 </button>
               </div>
               <button
-                onClick={() => setSale(null)}
+                onClick={() => updateActiveSale({ sale: null })}
                 style={{ width: "100%", marginTop: "15px", color: "#666", background: "none", border: "none", cursor: "pointer", textDecoration: "underline" }}
               >
                 Cancelar
