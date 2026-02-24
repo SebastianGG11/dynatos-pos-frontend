@@ -9,7 +9,8 @@ import {
   FiSquare,
   FiPackage,
   FiX,
-  FiPlus
+  FiPlus,
+  FiTag
 } from "react-icons/fi";
 
 export default function Venta({ cashDrawer, onCashClosed }) {
@@ -17,7 +18,6 @@ export default function Venta({ cashDrawer, onCashClosed }) {
   const [categories, setCategories] = useState([]);
   const [selectedCategory, setSelectedCategory] = useState("ALL");
   
-  // ✅ NUEVO: Sistema de múltiples ventas
   const [sales, setSales] = useState([
     {
       id: 1,
@@ -43,7 +43,6 @@ export default function Venta({ cashDrawer, onCashClosed }) {
   const scanBufferRef = useRef("");
   const lastKeyTimeRef = useRef(0);
 
-  // ✅ Helper: Obtener venta activa
   const activeSale = sales.find(s => s.id === activeSaleId);
   const cart = activeSale?.cart || [];
   const sale = activeSale?.sale || null;
@@ -53,7 +52,6 @@ export default function Venta({ cashDrawer, onCashClosed }) {
   const clientName = activeSale?.clientName || "";
   const clientDoc = activeSale?.clientDoc || "";
 
-  // ✅ Helper: Actualizar venta activa
   const updateActiveSale = (updates) => {
     setSales(prev => prev.map(s => 
       s.id === activeSaleId ? { ...s, ...updates } : s
@@ -176,11 +174,9 @@ export default function Venta({ cashDrawer, onCashClosed }) {
       ? products
       : products.filter((p) => p.category_id === selectedCategory);
 
-  // ✅ MODIFICADO: Stock compartido entre TODAS las ventas
   const getAvailableStock = (product) => {
     let totalInAllCarts = 0;
 
-    // Contar en TODAS las ventas
     sales.forEach(saleObj => {
       const normalInCart = saleObj.cart
         .filter((i) => i.id === product?.id && !i.is_presentation)
@@ -197,7 +193,6 @@ export default function Venta({ cashDrawer, onCashClosed }) {
   };
 
   const addPresentationToCart = (productId, productName, presentationId, presentationName, quantity, price, baseStock) => {
-    // Verificar stock en TODAS las ventas
     let totalUnitsInAllCarts = 0;
     sales.forEach(saleObj => {
       totalUnitsInAllCarts += saleObj.cart
@@ -331,7 +326,6 @@ export default function Venta({ cashDrawer, onCashClosed }) {
     });
   };
 
-  // ✅ NUEVO: Crear nueva venta
   const createNewSale = () => {
     const newSale = {
       id: nextSaleId,
@@ -348,15 +342,11 @@ export default function Venta({ cashDrawer, onCashClosed }) {
     setNextSaleId(prev => prev + 1);
   };
 
-  // ✅ NUEVO: Cerrar venta sin cobrar
   const closeSale = (saleId) => {
     if (sales.length === 1) {
-      // Si es la última, solo limpiarla
       clearCart();
     } else {
-      // Eliminar la venta
       setSales(prev => prev.filter(s => s.id !== saleId));
-      // Si estaba activa, cambiar a la primera disponible
       if (activeSaleId === saleId) {
         const remaining = sales.filter(s => s.id !== saleId);
         setActiveSaleId(remaining[0].id);
@@ -364,25 +354,49 @@ export default function Venta({ cashDrawer, onCashClosed }) {
     }
   };
 
-  useEffect(() => {
-    if (!cashDrawer?.id) return;
-    if (cart.length === 0) {
+  // ✅ NUEVO: Llamar a preview para aplicar promociones
+  const fetchPreview = async () => {
+    if (!cashDrawer?.id || cart.length === 0) {
       updateActiveSale({ preview: null });
       return;
     }
-    const totalLocal = cart.reduce(
-      (sum, i) => sum + Number(i.sale_price) * i.qty,
-      0
-    );
-    updateActiveSale({ preview: { total: totalLocal } });
+
+    try {
+      const items = cart.map((i) => {
+        if (i.is_presentation) {
+          return {
+            product_id: i.product_id,
+            quantity: i.units_per_item * i.qty,
+            unit_price_override: i.sale_price / i.units_per_item
+          };
+        } else {
+          return {
+            product_id: i.id,
+            quantity: i.qty
+          };
+        }
+      });
+
+      const res = await api.post("/sales/preview", {
+        cash_drawer_id: cashDrawer.id,
+        items: items
+      });
+
+      updateActiveSale({ preview: res.data });
+    } catch (error) {
+      console.error("Error fetching preview:", error);
+    }
+  };
+
+  // ✅ Ejecutar preview cada vez que cambie el carrito
+  useEffect(() => {
+    fetchPreview();
   }, [cart, cashDrawer?.id]);
 
-  const total =
-    preview?.total ??
-    cart.reduce((s, i) => s + Number(i.sale_price) * i.qty, 0);
-
-  const valorImpuesto = total - total / 1.19;
-  const baseGravable = total - valorImpuesto;
+  const total = preview?.total ?? 0;
+  const valorImpuesto = preview?.tax_total ?? 0;
+  const baseGravable = preview?.subtotal ?? 0;
+  const promoDiscount = preview?.promo_discount_total ?? 0;
 
   const finalizeTransaction = async (method, received, change) => {
     let finalCustomerName = "CLIENTE GENERAL";
@@ -474,7 +488,7 @@ export default function Venta({ cashDrawer, onCashClosed }) {
     }
 
     setTimeout(() => {
-      closeSale(activeSaleId); // Cerrar la venta actual después del pago
+      closeSale(activeSaleId);
       loadAll();
     }, 1000);
   };
@@ -540,6 +554,13 @@ export default function Venta({ cashDrawer, onCashClosed }) {
     } catch {
       alert("Error procesando pago QR");
     }
+  };
+
+  // ✅ Helper: Encontrar item del preview para mostrar descuento
+  const getPreviewItem = (cartItem) => {
+    if (!preview?.items) return null;
+    const productId = cartItem.product_id || cartItem.id;
+    return preview.items.find(pi => pi.product_id === productId);
   };
 
   return (
@@ -625,7 +646,7 @@ export default function Venta({ cashDrawer, onCashClosed }) {
       {/* PRODUCTOS */}
       <div style={{ flex: 1, display: "flex", flexDirection: "column" }}>
         
-        {/* ✅ TABS DE VENTAS */}
+        {/* TABS DE VENTAS */}
         <div style={{ borderBottom: "1px solid #222", background: "#050505", padding: "10px 20px", display: "flex", gap: "10px", overflowX: "auto" }}>
           {sales.map((s) => (
             <div
@@ -749,26 +770,52 @@ export default function Venta({ cashDrawer, onCashClosed }) {
         <div style={{ flex: 1, overflowY: "auto", padding: "20px" }}>
           {cart.map((i) => {
             const itemId = i.cart_id || i.id;
+            const previewItem = getPreviewItem(i);
+            const hasPromo = previewItem && previewItem.discount_amount > 0;
+            
             return (
-              <div key={itemId} style={{ display: "flex", justifyContent: "space-between", marginBottom: "15px", fontSize: "0.9rem", color: "#eee" }}>
-                <div style={{ flex: 1 }}>
-                  {i.name}
-                  {i.is_presentation && (
-                    <div style={{ fontSize: "0.7rem", color: "#2ecc71", marginTop: "2px" }}>
-                      <FiPackage size={10} style={{ verticalAlign: "middle" }} /> {i.units_per_item}u
+              <div key={itemId} style={{ marginBottom: "15px", padding: "10px", background: hasPromo ? "#1a2e1a" : "transparent", borderRadius: "8px", border: hasPromo ? "1px solid #2ecc71" : "none" }}>
+                <div style={{ display: "flex", justifyContent: "space-between", fontSize: "0.9rem", color: "#eee" }}>
+                  <div style={{ flex: 1 }}>
+                    <div style={{ display: "flex", alignItems: "center", gap: "5px" }}>
+                      {i.name}
+                      {hasPromo && (
+                        <span style={{ display: "inline-flex", alignItems: "center", gap: "3px", background: "#2ecc71", color: "#000", padding: "2px 6px", borderRadius: "4px", fontSize: "0.65rem", fontWeight: "bold" }}>
+                          <FiTag size={10} /> PROMO
+                        </span>
+                      )}
                     </div>
-                  )}
+                    {i.is_presentation && (
+                      <div style={{ fontSize: "0.7rem", color: "#2ecc71", marginTop: "2px" }}>
+                        <FiPackage size={10} style={{ verticalAlign: "middle" }} /> {i.units_per_item}u
+                      </div>
+                    )}
+                    {hasPromo && (
+                      <div style={{ fontSize: "0.7rem", color: "#2ecc71", marginTop: "2px" }}>
+                        Ahorro: ${previewItem.discount_amount.toLocaleString()}
+                      </div>
+                    )}
+                  </div>
+                  <div style={{ display: "flex", alignItems: "center", gap: "8px", margin: "0 10px" }}>
+                    <button onClick={() => decreaseQty(itemId)} style={{ background: "#222", border: "none", color: "#fff", width: "24px", cursor: "pointer", borderRadius: "4px" }}>
+                      -
+                    </button>
+                    <span>{i.qty}</span>
+                    <button onClick={() => increaseQty(itemId)} style={{ background: "#222", border: "none", color: "#fff", width: "24px", cursor: "pointer", borderRadius: "4px" }}>
+                      +
+                    </button>
+                  </div>
+                  <div style={{ textAlign: "right" }}>
+                    {hasPromo && (
+                      <div style={{ fontSize: "0.7rem", color: "#888", textDecoration: "line-through" }}>
+                        ${(i.qty * i.sale_price).toLocaleString()}
+                      </div>
+                    )}
+                    <div style={{ color: hasPromo ? "#2ecc71" : "#D4AF37", fontWeight: "bold" }}>
+                      ${previewItem ? previewItem.total.toLocaleString() : (i.qty * i.sale_price).toLocaleString()}
+                    </div>
+                  </div>
                 </div>
-                <div style={{ display: "flex", alignItems: "center", gap: "8px", margin: "0 10px" }}>
-                  <button onClick={() => decreaseQty(itemId)} style={{ background: "#222", border: "none", color: "#fff", width: "24px", cursor: "pointer", borderRadius: "4px" }}>
-                    -
-                  </button>
-                  <span>{i.qty}</span>
-                  <button onClick={() => increaseQty(itemId)} style={{ background: "#222", border: "none", color: "#fff", width: "24px", cursor: "pointer", borderRadius: "4px" }}>
-                    +
-                  </button>
-                </div>
-                <div style={{ color: "#D4AF37" }}>${(i.qty * i.sale_price).toLocaleString()}</div>
               </div>
             );
           })}
@@ -779,11 +826,17 @@ export default function Venta({ cashDrawer, onCashClosed }) {
             <span>BASE</span>
             <span>${baseGravable.toLocaleString(undefined, { maximumFractionDigits: 0 })}</span>
           </div>
-          <div style={{ display: "flex", justifyContent: "space-between", color: "#666", fontSize: "0.8rem", marginBottom: "15px" }}>
+          <div style={{ display: "flex", justifyContent: "space-between", color: "#666", fontSize: "0.8rem" }}>
             <span>IC / IMPOCONSUMO</span>
             <span>${valorImpuesto.toLocaleString(undefined, { maximumFractionDigits: 0 })}</span>
           </div>
-          <div style={{ display: "flex", justifyContent: "space-between", fontSize: "2rem", fontWeight: "bold", color: "#D4AF37", marginBottom: "20px" }}>
+          {promoDiscount > 0 && (
+            <div style={{ display: "flex", justifyContent: "space-between", color: "#2ecc71", fontSize: "0.8rem", fontWeight: "bold" }}>
+              <span>🎉 DESCUENTO PROMOS</span>
+              <span>-${promoDiscount.toLocaleString(undefined, { maximumFractionDigits: 0 })}</span>
+            </div>
+          )}
+          <div style={{ display: "flex", justifyContent: "space-between", fontSize: "2rem", fontWeight: "bold", color: "#D4AF37", marginTop: "15px", marginBottom: "20px" }}>
             <span>TOTAL</span>
             <span>${total.toLocaleString()}</span>
           </div>
