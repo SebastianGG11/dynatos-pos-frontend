@@ -13,8 +13,7 @@ import AdminProducts from "./pages/AdminProducts.jsx";
 import AdminPresentations from "./components/AdminPresentations.jsx";
 import AdminUsers from "./pages/AdminUsers.jsx";
 import AdminSales from "./pages/AdminSales.jsx";
-import AdminPromotions from "./pages/AdminPromotions.jsx";
-import AdminPromotionsV2 from "./pages/AdminPromotionsV2.jsx"; // ✅ NUEVO
+import AdminPromotionsUnified from "./pages/AdminPromotionsUnified.jsx"; // ✅ UNIFICADO
 import AdminPurchases from "./pages/AdminPurchases.jsx";
 import AdminReturns from "./pages/AdminReturns.jsx"; 
 import AdminFinancials from "./pages/AdminFinancials.jsx"; 
@@ -101,8 +100,7 @@ export default function App() {
           <Route path="productos" element={<AdminProducts />} />
           <Route path="productos/:productId/presentations" element={<AdminPresentations />} />
           <Route path="compras" element={<AdminPurchases />} />
-          <Route path="promociones" element={<AdminPromotions />} />
-          <Route path="promociones-v2" element={<AdminPromotionsV2 />} /> {/* ✅ NUEVO */}
+          <Route path="promociones" element={<AdminPromotionsUnified />} /> {/* ✅ UNIFICADO */}
           <Route path="usuarios" element={<AdminUsers />} />
           <Route path="ventas" element={<AdminSales />} />
           <Route path="returns" element={<AdminReturns />} />
