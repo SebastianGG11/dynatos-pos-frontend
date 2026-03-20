@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState, useMemo } from "react";
+import { useEffect, useRef, useState, useMemo, useCallback } from "react";
 import api from "../api/api";
 import CerrarCaja from "./CerrarCaja";
 import {
@@ -11,20 +11,19 @@ import {
   FiX,
   FiPlus,
   FiTag,
-  FiSearch,
-  FiEdit3
+  FiSearch
 } from "react-icons/fi";
 
 export default function Venta({ cashDrawer, onCashClosed }) {
   const [products, setProducts] = useState([]);
   const [categories, setCategories] = useState([]);
   const [selectedCategory, setSelectedCategory] = useState("ALL");
-  const [searchTerm, setSearchTerm] = useState(""); // ✅ NUEVO
+  const [searchTerm, setSearchTerm] = useState("");
   
   const [sales, setSales] = useState([
     {
       id: 1,
-      customName: "", // ✅ NUEVO
+      customName: "",
       cart: [],
       sale: null,
       preview: null,
@@ -56,48 +55,240 @@ export default function Venta({ cashDrawer, onCashClosed }) {
   const clientName = activeSale?.clientName || "";
   const clientDoc = activeSale?.clientDoc || "";
 
-  const updateActiveSale = (updates) => {
+  const updateActiveSale = useCallback((updates) => {
     setSales(prev => prev.map(s => 
       s.id === activeSaleId ? { ...s, ...updates } : s
     ));
-  };
+  }, [activeSaleId]);
 
-  const handleBarcodeScan = async (codeRaw) => {
-    const code = String(codeRaw || "").trim();
-    if (!code) return;
-
+  useEffect(() => {
     try {
-      const res = await api.get(`/presentations/search?q=${code}`);
-      const data = res.data;
-
-      if (data.single_presentation) {
-        addPresentationToCart(
-          data.product_id,
-          data.product_name,
-          data.presentation.id,
-          data.presentation.presentation_name,
-          data.presentation.quantity,
-          data.presentation.sale_price,
-          data.base_stock
-        );
-      } else {
-        setCurrentProductPresentations(data);
-        setShowPresentationsModal(true);
+      const userStored = localStorage.getItem("user");
+      if (userStored) {
+        const parsed = JSON.parse(userStored);
+        setUsuarioActual(parsed.fullname || parsed.username || "Cajero");
       }
-    } catch (error) {
-      console.log("🔎 Código no encontrado:", code);
-      const found =
-        products.find((p) => String(p.barcode || "").trim() === code) ||
-        products.find((p) => String(p.sku || "").trim() === code);
+    } catch (e) {
+      console.error("Error leyendo usuario", e);
+    }
+    loadAll();
+  }, []);
 
-      if (found) {
-        addProduct(found);
-      }
+  const loadAll = async () => {
+    try {
+      const [catRes, prodRes] = await Promise.all([
+        api.get("/categories"),
+        api.get("/products")
+      ]);
+      setCategories(catRes.data?.items ?? []);
+      setProducts(prodRes.data?.items ?? []);
+    } catch {
+      console.error("Error datos");
     }
   };
 
-  // ✅ SCANNER MEJORADO - NO BLOQUEA INPUTS
+  const filteredProducts = useMemo(() => {
+    let filtered = selectedCategory === "ALL" 
+      ? products 
+      : products.filter((p) => p.category_id === selectedCategory);
+    
+    if (searchTerm.trim()) {
+      const term = searchTerm.toLowerCase();
+      filtered = filtered.filter(p => 
+        p.name.toLowerCase().includes(term) ||
+        String(p.barcode || "").includes(term) ||
+        String(p.sku || "").includes(term)
+      );
+    }
+    
+    return filtered;
+  }, [products, selectedCategory, searchTerm]);
+
+  const getAvailableStock = useCallback((product) => {
+    let totalInAllCarts = 0;
+
+    sales.forEach(saleObj => {
+      const normalInCart = saleObj.cart
+        .filter((i) => i.id === product?.id && !i.is_presentation)
+        .reduce((sum, i) => sum + i.qty, 0);
+      
+      const presentationsInCart = saleObj.cart
+        .filter((i) => i.product_id === product?.id && i.is_presentation)
+        .reduce((sum, i) => sum + (i.units_per_item * i.qty), 0);
+      
+      totalInAllCarts += normalInCart + presentationsInCart;
+    });
+    
+    return Number(product?.current_stock || 0) - totalInAllCarts;
+  }, [sales]);
+
+  const addPresentationToCart = useCallback((productId, productName, presentationId, presentationName, quantity, price, baseStock) => {
+    setSales(prevSales => {
+      const currentSale = prevSales.find(s => s.id === activeSaleId);
+      if (!currentSale) return prevSales;
+
+      let totalUnitsInAllCarts = 0;
+      prevSales.forEach(saleObj => {
+        totalUnitsInAllCarts += saleObj.cart
+          .filter(item => item.product_id === productId)
+          .reduce((sum, item) => sum + (item.units_per_item * item.qty), 0);
+      });
+      
+      const availableUnits = baseStock - totalUnitsInAllCarts;
+      
+      if (availableUnits < quantity) {
+        alert(`Stock insuficiente. Disponible: ${availableUnits} unidades`);
+        return prevSales;
+      }
+
+      const cartItemId = `${productId}-${presentationId}`;
+      const found = currentSale.cart.find((item) => item.cart_id === cartItemId);
+      
+      let newCart;
+      if (found) {
+        newCart = currentSale.cart.map((item) =>
+          item.cart_id === cartItemId ? { ...item, qty: item.qty + 1 } : item
+        );
+      } else {
+        newCart = [
+          ...currentSale.cart,
+          {
+            cart_id: cartItemId,
+            product_id: productId,
+            presentation_id: presentationId,
+            name: `${productName} - ${presentationName}`,
+            sale_price: price,
+            units_per_item: quantity,
+            qty: 1,
+            is_presentation: true
+          }
+        ];
+      }
+
+      return prevSales.map(s => 
+        s.id === activeSaleId ? { ...s, cart: newCart } : s
+      );
+    });
+
+    setShowPresentationsModal(false);
+    setCurrentProductPresentations(null);
+  }, [activeSaleId]);
+
+  const addProduct = useCallback(async (p) => {
+    if (getAvailableStock(p) <= 0) return;
+
+    try {
+      const res = await api.get(`/presentations/${p.id}/presentations`);
+      const presentations = res.data.items || [];
+
+      if (presentations.length === 0) {
+        setSales(prevSales => {
+          const currentSale = prevSales.find(s => s.id === activeSaleId);
+          if (!currentSale) return prevSales;
+
+          const found = currentSale.cart.find((item) => item.id === p.id && !item.is_presentation);
+          let newCart;
+          
+          if (found) {
+            newCart = currentSale.cart.map((item) =>
+              item.id === p.id && !item.is_presentation ? { ...item, qty: item.qty + 1 } : item
+            );
+          } else {
+            newCart = [...currentSale.cart, { ...p, qty: 1, is_presentation: false }];
+          }
+
+          return prevSales.map(s => 
+            s.id === activeSaleId ? { ...s, cart: newCart } : s
+          );
+        });
+      } else if (presentations.length === 1) {
+        const pres = presentations[0];
+        addPresentationToCart(
+          p.id,
+          p.name,
+          pres.id,
+          pres.name,
+          pres.quantity,
+          pres.sale_price,
+          p.current_stock
+        );
+      } else {
+        setCurrentProductPresentations({
+          product_id: p.id,
+          product_name: p.name,
+          base_stock: p.current_stock,
+          cost_price: p.cost_price,
+          image_filename: p.image_filename,
+          single_presentation: false,
+          presentations: presentations.map(pr => ({
+            id: pr.id,
+            presentation_name: pr.name,
+            quantity: pr.quantity,
+            sale_price: pr.sale_price
+          }))
+        });
+        setShowPresentationsModal(true);
+      }
+    } catch (error) {
+      console.log("No se encontraron presentaciones, agregando como producto normal");
+      setSales(prevSales => {
+        const currentSale = prevSales.find(s => s.id === activeSaleId);
+        if (!currentSale) return prevSales;
+
+        const found = currentSale.cart.find((item) => item.id === p.id && !item.is_presentation);
+        let newCart;
+        
+        if (found) {
+          newCart = currentSale.cart.map((item) =>
+            item.id === p.id && !item.is_presentation ? { ...item, qty: item.qty + 1 } : item
+          );
+        } else {
+          newCart = [...currentSale.cart, { ...p, qty: 1, is_presentation: false }];
+        }
+
+        return prevSales.map(s => 
+          s.id === activeSaleId ? { ...s, cart: newCart } : s
+        );
+      });
+    }
+  }, [activeSaleId, getAvailableStock, addPresentationToCart]);
+
+  // ✅ SCANNER CON DEPENDENCIAS CORRECTAS
   useEffect(() => {
+    const handleBarcodeScan = async (codeRaw) => {
+      const code = String(codeRaw || "").trim();
+      if (!code) return;
+
+      try {
+        const res = await api.get(`/presentations/search?q=${code}`);
+        const data = res.data;
+
+        if (data.single_presentation) {
+          addPresentationToCart(
+            data.product_id,
+            data.product_name,
+            data.presentation.id,
+            data.presentation.presentation_name,
+            data.presentation.quantity,
+            data.presentation.sale_price,
+            data.base_stock
+          );
+        } else {
+          setCurrentProductPresentations(data);
+          setShowPresentationsModal(true);
+        }
+      } catch (error) {
+        console.log("🔎 Código no encontrado:", code);
+        const found =
+          products.find((p) => String(p.barcode || "").trim() === code) ||
+          products.find((p) => String(p.sku || "").trim() === code);
+
+        if (found) {
+          addProduct(found);
+        }
+      }
+    };
+
     const onKeyDown = (e) => {
       if (e.key === "Shift" || e.key === "Alt" || e.key === "Control" || e.key === "Meta") return;
 
@@ -140,177 +331,7 @@ export default function Venta({ cashDrawer, onCashClosed }) {
 
     window.addEventListener("keydown", onKeyDown);
     return () => window.removeEventListener("keydown", onKeyDown);
-  }, [products]);
-
-  useEffect(() => {
-    try {
-      const userStored = localStorage.getItem("user");
-      if (userStored) {
-        const parsed = JSON.parse(userStored);
-        setUsuarioActual(parsed.fullname || parsed.username || "Cajero");
-      }
-    } catch (e) {
-      console.error("Error leyendo usuario", e);
-    }
-    loadAll();
-  }, []);
-
-  const loadAll = async () => {
-    try {
-      const [catRes, prodRes] = await Promise.all([
-        api.get("/categories"),
-        api.get("/products")
-      ]);
-      setCategories(catRes.data?.items ?? []);
-      setProducts(prodRes.data?.items ?? []);
-    } catch {
-      console.error("Error datos");
-    }
-  };
-
-  // ✅ BÚSQUEDA MEJORADA
-  const filteredProducts = useMemo(() => {
-    let filtered = selectedCategory === "ALL" 
-      ? products 
-      : products.filter((p) => p.category_id === selectedCategory);
-    
-    if (searchTerm.trim()) {
-      const term = searchTerm.toLowerCase();
-      filtered = filtered.filter(p => 
-        p.name.toLowerCase().includes(term) ||
-        String(p.barcode || "").includes(term) ||
-        String(p.sku || "").includes(term)
-      );
-    }
-    
-    return filtered;
-  }, [products, selectedCategory, searchTerm]);
-
-  const getAvailableStock = (product) => {
-    let totalInAllCarts = 0;
-
-    sales.forEach(saleObj => {
-      const normalInCart = saleObj.cart
-        .filter((i) => i.id === product?.id && !i.is_presentation)
-        .reduce((sum, i) => sum + i.qty, 0);
-      
-      const presentationsInCart = saleObj.cart
-        .filter((i) => i.product_id === product?.id && i.is_presentation)
-        .reduce((sum, i) => sum + (i.units_per_item * i.qty), 0);
-      
-      totalInAllCarts += normalInCart + presentationsInCart;
-    });
-    
-    return Number(product?.current_stock || 0) - totalInAllCarts;
-  };
-
-  const addPresentationToCart = (productId, productName, presentationId, presentationName, quantity, price, baseStock) => {
-    let totalUnitsInAllCarts = 0;
-    sales.forEach(saleObj => {
-      totalUnitsInAllCarts += saleObj.cart
-        .filter(item => item.product_id === productId)
-        .reduce((sum, item) => sum + (item.units_per_item * item.qty), 0);
-    });
-    
-    const availableUnits = baseStock - totalUnitsInAllCarts;
-    
-    if (availableUnits < quantity) {
-      alert(`Stock insuficiente. Disponible: ${availableUnits} unidades`);
-      return;
-    }
-
-    const cartItemId = `${productId}-${presentationId}`;
-
-    updateActiveSale({
-      cart: (() => {
-        const found = cart.find((item) => item.cart_id === cartItemId);
-        
-        if (found) {
-          return cart.map((item) =>
-            item.cart_id === cartItemId ? { ...item, qty: item.qty + 1 } : item
-          );
-        } else {
-          return [
-            ...cart,
-            {
-              cart_id: cartItemId,
-              product_id: productId,
-              presentation_id: presentationId,
-              name: `${productName} - ${presentationName}`,
-              sale_price: price,
-              units_per_item: quantity,
-              qty: 1,
-              is_presentation: true
-            }
-          ];
-        }
-      })()
-    });
-
-    setShowPresentationsModal(false);
-    setCurrentProductPresentations(null);
-  };
-
-  const addProduct = async (p) => {
-    if (getAvailableStock(p) <= 0) return;
-
-    try {
-      const res = await api.get(`/presentations/${p.id}/presentations`);
-      const presentations = res.data.items || [];
-
-      if (presentations.length === 0) {
-        updateActiveSale({
-          cart: (() => {
-            const found = cart.find((item) => item.id === p.id && !item.is_presentation);
-            return found
-              ? cart.map((item) =>
-                  item.id === p.id && !item.is_presentation ? { ...item, qty: item.qty + 1 } : item
-                )
-              : [...cart, { ...p, qty: 1, is_presentation: false }];
-          })()
-        });
-      } else if (presentations.length === 1) {
-        const pres = presentations[0];
-        addPresentationToCart(
-          p.id,
-          p.name,
-          pres.id,
-          pres.name,
-          pres.quantity,
-          pres.sale_price,
-          p.current_stock
-        );
-      } else {
-        setCurrentProductPresentations({
-          product_id: p.id,
-          product_name: p.name,
-          base_stock: p.current_stock,
-          cost_price: p.cost_price,
-          image_filename: p.image_filename,
-          single_presentation: false,
-          presentations: presentations.map(pr => ({
-            id: pr.id,
-            presentation_name: pr.name,
-            quantity: pr.quantity,
-            sale_price: pr.sale_price
-          }))
-        });
-        setShowPresentationsModal(true);
-      }
-    } catch (error) {
-      console.log("No se encontraron presentaciones, agregando como producto normal");
-      updateActiveSale({
-        cart: (() => {
-          const found = cart.find((item) => item.id === p.id && !item.is_presentation);
-          return found
-            ? cart.map((item) =>
-                item.id === p.id && !item.is_presentation ? { ...item, qty: item.qty + 1 } : item
-              )
-            : [...cart, { ...p, qty: 1, is_presentation: false }];
-        })()
-      });
-    }
-  };
+  }, [products, addProduct, addPresentationToCart]); // ✅ Dependencias correctas
 
   const increaseQty = (cartId) => {
     updateActiveSale({
@@ -367,7 +388,6 @@ export default function Venta({ cashDrawer, onCashClosed }) {
     }
   };
 
-  // ✅ EDITAR NOMBRE DE VENTA
   const editSaleName = (saleId) => {
     const sale = sales.find(s => s.id === saleId);
     const currentName = sale?.customName || `Venta ${saleId}`;
@@ -589,7 +609,7 @@ export default function Venta({ cashDrawer, onCashClosed }) {
   return (
     <div style={{ display: "flex", height: "100vh", backgroundColor: "#000", overflow: "hidden" }}>
       
-      {/* SIDEBAR IZQUIERDO - RESPONSIVE */}
+      {/* SIDEBAR */}
       <div style={{ width: "200px", borderRight: "1px solid #D4AF37", padding: "15px", display: "flex", flexDirection: "column", background: "#050505" }}>
         <h3 style={{ color: "#D4AF37", fontSize: "0.75rem", marginBottom: "15px", letterSpacing: "1px" }}>CATEGORÍAS</h3>
         <div style={{ flex: 1, overflowY: "auto" }}>
@@ -671,7 +691,7 @@ export default function Venta({ cashDrawer, onCashClosed }) {
       {/* PRODUCTOS */}
       <div style={{ flex: 1, display: "flex", flexDirection: "column" }}>
         
-        {/* TABS DE VENTAS - RESPONSIVE */}
+        {/* TABS */}
         <div style={{ borderBottom: "1px solid #222", background: "#050505", padding: "8px 15px", display: "flex", gap: "8px", overflowX: "auto" }}>
           {sales.map((s) => (
             <div
@@ -762,13 +782,12 @@ export default function Venta({ cashDrawer, onCashClosed }) {
           </button>
         </div>
 
-        {/* PRODUCTOS - RESPONSIVE */}
+        {/* PRODUCTOS */}
         <div style={{ flex: 1, padding: "15px", overflowY: "auto" }}>
           <h1 style={{ color: "#D4AF37", fontFamily: "serif", margin: "0 0 15px 0", borderBottom: "1px solid #222", paddingBottom: "10px", fontSize: "1.5rem" }}>
             PRODUCTOS
           </h1>
           
-          {/* ✅ BARRA DE BÚSQUEDA */}
           <div style={{ position: "relative", marginBottom: "20px" }}>
             <FiSearch style={{ position: "absolute", left: "12px", top: "50%", transform: "translateY(-50%)", color: "#D4AF37" }} />
             <input
@@ -802,9 +821,7 @@ export default function Venta({ cashDrawer, onCashClosed }) {
                   borderRadius: "10px",
                   textAlign: "left",
                   cursor: getAvailableStock(p) <= 0 ? "not-allowed" : "pointer",
-                  opacity: getAvailableStock(p) <= 0 ? 0.5 : 1,
-                  position: "relative",
-                  overflow: "hidden"
+                  opacity: getAvailableStock(p) <= 0 ? 0.5 : 1
                 }}
               >
                 <div style={{ fontWeight: "bold", fontSize: "0.8rem", color: "#fff", marginBottom: "4px", lineHeight: "1.2" }}>{p.name}</div>
@@ -816,7 +833,10 @@ export default function Venta({ cashDrawer, onCashClosed }) {
         </div>
       </div>
 
-      {/* CARRITO - RESPONSIVE */}
+      {/* CARRITO... resto del código igual que antes */}
+      {/* (El código del carrito, modales, etc. permanece exactamente igual) */}
+
+{/* CARRITO - RESPONSIVE */}
       <div style={{ width: "350px", borderLeft: "1px solid #222", display: "flex", flexDirection: "column", backgroundColor: "#080808" }}>
         <div style={{ padding: "15px", borderBottom: "1px solid #222", color: "#D4AF37", fontWeight: "bold", fontSize: "1rem" }}>
           <FiShoppingCart style={{ marginRight: "6px", verticalAlign: "bottom" }} /> VENTA {activeSaleId}
