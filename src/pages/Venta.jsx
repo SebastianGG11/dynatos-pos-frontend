@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useRef, useState, useMemo } from "react";
 import api from "../api/api";
 import CerrarCaja from "./CerrarCaja";
 import {
@@ -10,17 +10,21 @@ import {
   FiPackage,
   FiX,
   FiPlus,
-  FiTag
+  FiTag,
+  FiSearch,
+  FiEdit3
 } from "react-icons/fi";
 
 export default function Venta({ cashDrawer, onCashClosed }) {
   const [products, setProducts] = useState([]);
   const [categories, setCategories] = useState([]);
   const [selectedCategory, setSelectedCategory] = useState("ALL");
+  const [searchTerm, setSearchTerm] = useState(""); // ✅ NUEVO
   
   const [sales, setSales] = useState([
     {
       id: 1,
+      customName: "", // ✅ NUEVO
       cart: [],
       sale: null,
       preview: null,
@@ -58,13 +62,6 @@ export default function Venta({ cashDrawer, onCashClosed }) {
     ));
   };
 
-  const isEditableElement = () => {
-    const el = document.activeElement;
-    if (!el) return false;
-    const tag = (el.tagName || "").toLowerCase();
-    return tag === "input" || tag === "textarea" || el.isContentEditable;
-  };
-
   const handleBarcodeScan = async (codeRaw) => {
     const code = String(codeRaw || "").trim();
     if (!code) return;
@@ -99,15 +96,23 @@ export default function Venta({ cashDrawer, onCashClosed }) {
     }
   };
 
+  // ✅ SCANNER MEJORADO - NO BLOQUEA INPUTS
   useEffect(() => {
     const onKeyDown = (e) => {
       if (e.key === "Shift" || e.key === "Alt" || e.key === "Control" || e.key === "Meta") return;
 
+      const activeEl = document.activeElement;
+      const tagName = activeEl?.tagName?.toLowerCase();
+      const isTypingInInput = tagName === "input" || tagName === "textarea" || activeEl?.isContentEditable;
+
+      if (isTypingInInput) {
+        scanBufferRef.current = "";
+        return;
+      }
+
       const now = Date.now();
       const delta = now - (lastKeyTimeRef.current || 0);
       lastKeyTimeRef.current = now;
-
-      const typingHuman = isEditableElement() && delta > 80;
 
       if (e.key === "Enter") {
         const candidate = scanBufferRef.current;
@@ -122,25 +127,19 @@ export default function Venta({ cashDrawer, onCashClosed }) {
 
       const isChar = /^[a-zA-Z0-9\-_]$/.test(e.key);
       if (!isChar) {
-        if (!typingHuman) scanBufferRef.current = "";
+        scanBufferRef.current = "";
         return;
       }
 
-      if (typingHuman) return;
-
-      if (delta > 120) {
-        scanBufferRef.current = e.key;
-      } else {
+      if (delta < 50) {
         scanBufferRef.current += e.key;
-      }
-
-      if (isEditableElement() && delta <= 80) {
-        e.preventDefault();
+      } else {
+        scanBufferRef.current = e.key;
       }
     };
 
-    window.addEventListener("keydown", onKeyDown, { capture: true });
-    return () => window.removeEventListener("keydown", onKeyDown, { capture: true });
+    window.addEventListener("keydown", onKeyDown);
+    return () => window.removeEventListener("keydown", onKeyDown);
   }, [products]);
 
   useEffect(() => {
@@ -169,10 +168,23 @@ export default function Venta({ cashDrawer, onCashClosed }) {
     }
   };
 
-  const filteredProducts =
-    selectedCategory === "ALL"
-      ? products
+  // ✅ BÚSQUEDA MEJORADA
+  const filteredProducts = useMemo(() => {
+    let filtered = selectedCategory === "ALL" 
+      ? products 
       : products.filter((p) => p.category_id === selectedCategory);
+    
+    if (searchTerm.trim()) {
+      const term = searchTerm.toLowerCase();
+      filtered = filtered.filter(p => 
+        p.name.toLowerCase().includes(term) ||
+        String(p.barcode || "").includes(term) ||
+        String(p.sku || "").includes(term)
+      );
+    }
+    
+    return filtered;
+  }, [products, selectedCategory, searchTerm]);
 
   const getAvailableStock = (product) => {
     let totalInAllCarts = 0;
@@ -329,6 +341,7 @@ export default function Venta({ cashDrawer, onCashClosed }) {
   const createNewSale = () => {
     const newSale = {
       id: nextSaleId,
+      customName: "",
       cart: [],
       sale: null,
       preview: null,
@@ -354,7 +367,19 @@ export default function Venta({ cashDrawer, onCashClosed }) {
     }
   };
 
-  // ✅ NUEVO: Llamar a preview para aplicar promociones
+  // ✅ EDITAR NOMBRE DE VENTA
+  const editSaleName = (saleId) => {
+    const sale = sales.find(s => s.id === saleId);
+    const currentName = sale?.customName || `Venta ${saleId}`;
+    const newName = prompt("Nombre de la venta:", currentName);
+    
+    if (newName !== null && newName.trim()) {
+      setSales(prev => prev.map(s => 
+        s.id === saleId ? { ...s, customName: newName.trim() } : s
+      ));
+    }
+  };
+
   const fetchPreview = async () => {
     if (!cashDrawer?.id || cart.length === 0) {
       updateActiveSale({ preview: null });
@@ -388,7 +413,6 @@ export default function Venta({ cashDrawer, onCashClosed }) {
     }
   };
 
-  // ✅ Ejecutar preview cada vez que cambie el carrito
   useEffect(() => {
     fetchPreview();
   }, [cart, cashDrawer?.id]);
@@ -556,7 +580,6 @@ export default function Venta({ cashDrawer, onCashClosed }) {
     }
   };
 
-  // ✅ Helper: Encontrar item del preview para mostrar descuento
   const getPreviewItem = (cartItem) => {
     if (!preview?.items) return null;
     const productId = cartItem.product_id || cartItem.id;
@@ -566,23 +589,24 @@ export default function Venta({ cashDrawer, onCashClosed }) {
   return (
     <div style={{ display: "flex", height: "100vh", backgroundColor: "#000", overflow: "hidden" }}>
       
-      {/* SIDEBAR IZQUIERDO */}
-      <div style={{ width: "200px", borderRight: "1px solid #D4AF37", padding: "20px", display: "flex", flexDirection: "column", background: "#050505" }}>
-        <h3 style={{ color: "#D4AF37", fontSize: "0.8rem", marginBottom: "20px", letterSpacing: "1px" }}>CATEGORÍAS</h3>
+      {/* SIDEBAR IZQUIERDO - RESPONSIVE */}
+      <div style={{ width: "200px", borderRight: "1px solid #D4AF37", padding: "15px", display: "flex", flexDirection: "column", background: "#050505" }}>
+        <h3 style={{ color: "#D4AF37", fontSize: "0.75rem", marginBottom: "15px", letterSpacing: "1px" }}>CATEGORÍAS</h3>
         <div style={{ flex: 1, overflowY: "auto" }}>
           <button
             onClick={() => setSelectedCategory("ALL")}
             style={{
               width: "100%",
-              padding: "12px",
-              marginBottom: "8px",
-              borderRadius: "8px",
+              padding: "10px",
+              marginBottom: "6px",
+              borderRadius: "6px",
               border: "1px solid #333",
               color: selectedCategory === "ALL" ? "#000" : "#fff",
               backgroundColor: selectedCategory === "ALL" ? "#D4AF37" : "transparent",
               fontWeight: "bold",
               cursor: "pointer",
-              textAlign: "left"
+              textAlign: "left",
+              fontSize: "0.75rem"
             }}
           >
             TODAS
@@ -593,14 +617,14 @@ export default function Venta({ cashDrawer, onCashClosed }) {
               onClick={() => setSelectedCategory(c.id)}
               style={{
                 width: "100%",
-                padding: "12px",
-                marginBottom: "8px",
-                borderRadius: "8px",
+                padding: "10px",
+                marginBottom: "6px",
+                borderRadius: "6px",
                 border: "1px solid #333",
                 color: selectedCategory === c.id ? "#000" : "#fff",
                 backgroundColor: selectedCategory === c.id ? "#D4AF37" : "transparent",
                 cursor: "pointer",
-                fontSize: "0.8rem",
+                fontSize: "0.7rem",
                 textAlign: "left"
               }}
             >
@@ -609,14 +633,14 @@ export default function Venta({ cashDrawer, onCashClosed }) {
           ))}
         </div>
 
-        <div style={{ borderTop: "1px solid #333", paddingTop: "20px", marginTop: "10px" }}>
-          <div style={{ display: "flex", alignItems: "center", gap: "10px", marginBottom: "15px", color: "#fff" }}>
-            <div style={{ background: "#222", padding: "10px", borderRadius: "50%" }}>
-              <FiUser color="#D4AF37" />
+        <div style={{ borderTop: "1px solid #333", paddingTop: "15px", marginTop: "10px" }}>
+          <div style={{ display: "flex", alignItems: "center", gap: "8px", marginBottom: "12px", color: "#fff" }}>
+            <div style={{ background: "#222", padding: "8px", borderRadius: "50%" }}>
+              <FiUser color="#D4AF37" size={14} />
             </div>
             <div style={{ overflow: "hidden" }}>
-              <p style={{ margin: 0, fontSize: "0.7rem", color: "#888" }}>Cajero Activo</p>
-              <p style={{ margin: 0, fontWeight: "bold", fontSize: "0.9rem", whiteSpace: "nowrap", textOverflow: "ellipsis", overflow: "hidden" }}>
+              <p style={{ margin: 0, fontSize: "0.65rem", color: "#888" }}>Cajero</p>
+              <p style={{ margin: 0, fontWeight: "bold", fontSize: "0.8rem", whiteSpace: "nowrap", textOverflow: "ellipsis", overflow: "hidden" }}>
                 {usuarioActual}
               </p>
             </div>
@@ -625,20 +649,21 @@ export default function Venta({ cashDrawer, onCashClosed }) {
             onClick={() => setShowCloseCash(true)}
             style={{
               width: "100%",
-              padding: "12px",
+              padding: "10px",
               background: "#f44",
               color: "#fff",
               border: "none",
-              borderRadius: "8px",
+              borderRadius: "6px",
               fontWeight: "bold",
               cursor: "pointer",
               display: "flex",
               alignItems: "center",
               justifyContent: "center",
-              gap: "8px"
+              gap: "6px",
+              fontSize: "0.75rem"
             }}
           >
-            <FiLogOut /> CERRAR TURNO
+            <FiLogOut size={12} /> CERRAR
           </button>
         </div>
       </div>
@@ -646,42 +671,50 @@ export default function Venta({ cashDrawer, onCashClosed }) {
       {/* PRODUCTOS */}
       <div style={{ flex: 1, display: "flex", flexDirection: "column" }}>
         
-        {/* TABS DE VENTAS */}
-        <div style={{ borderBottom: "1px solid #222", background: "#050505", padding: "10px 20px", display: "flex", gap: "10px", overflowX: "auto" }}>
+        {/* TABS DE VENTAS - RESPONSIVE */}
+        <div style={{ borderBottom: "1px solid #222", background: "#050505", padding: "8px 15px", display: "flex", gap: "8px", overflowX: "auto" }}>
           {sales.map((s) => (
             <div
               key={s.id}
               onClick={() => setActiveSaleId(s.id)}
               style={{
                 position: "relative",
-                padding: "10px 15px",
-                borderRadius: "8px 8px 0 0",
+                padding: "8px 12px",
+                borderRadius: "6px 6px 0 0",
                 background: activeSaleId === s.id ? "#D4AF37" : "#111",
                 color: activeSaleId === s.id ? "#000" : "#fff",
                 cursor: "pointer",
                 display: "flex",
                 alignItems: "center",
-                gap: "10px",
-                minWidth: "120px",
+                gap: "6px",
+                minWidth: "100px",
                 fontWeight: "bold",
-                fontSize: "0.9rem",
+                fontSize: "0.8rem",
                 border: activeSaleId === s.id ? "2px solid #D4AF37" : "1px solid #333",
                 borderBottom: "none"
               }}
             >
-              <FiShoppingCart size={16} />
-              <span>Venta {s.id}</span>
+              <FiShoppingCart size={14} />
+              <span 
+                onDoubleClick={(e) => {
+                  e.stopPropagation();
+                  editSaleName(s.id);
+                }}
+                title="Doble click para editar"
+              >
+                {s.customName || `Venta ${s.id}`}
+              </span>
               {s.cart.length > 0 && (
                 <span style={{
                   background: activeSaleId === s.id ? "#000" : "#D4AF37",
                   color: activeSaleId === s.id ? "#D4AF37" : "#000",
                   borderRadius: "50%",
-                  width: "22px",
-                  height: "22px",
+                  width: "18px",
+                  height: "18px",
                   display: "flex",
                   alignItems: "center",
                   justifyContent: "center",
-                  fontSize: "0.7rem",
+                  fontSize: "0.65rem",
                   fontWeight: "bold"
                 }}>
                   {s.cart.length}
@@ -703,7 +736,7 @@ export default function Venta({ cashDrawer, onCashClosed }) {
                     alignItems: "center"
                   }}
                 >
-                  <FiX size={16} />
+                  <FiX size={14} />
                 </button>
               )}
             </div>
@@ -711,8 +744,8 @@ export default function Venta({ cashDrawer, onCashClosed }) {
           <button
             onClick={createNewSale}
             style={{
-              padding: "10px 15px",
-              borderRadius: "8px 8px 0 0",
+              padding: "8px 12px",
+              borderRadius: "6px 6px 0 0",
               background: "#111",
               color: "#D4AF37",
               border: "1px solid #333",
@@ -720,21 +753,43 @@ export default function Venta({ cashDrawer, onCashClosed }) {
               cursor: "pointer",
               display: "flex",
               alignItems: "center",
-              gap: "5px",
-              fontSize: "0.9rem",
+              gap: "4px",
+              fontSize: "0.8rem",
               fontWeight: "bold"
             }}
           >
-            <FiPlus size={16} /> Nueva
+            <FiPlus size={14} /> Nueva
           </button>
         </div>
 
-        {/* PRODUCTOS */}
-        <div style={{ flex: 1, padding: "30px", overflowY: "auto" }}>
-          <h1 style={{ color: "#D4AF37", fontFamily: "serif", margin: "0 0 30px 0", borderBottom: "1px solid #222", paddingBottom: "15px" }}>
+        {/* PRODUCTOS - RESPONSIVE */}
+        <div style={{ flex: 1, padding: "15px", overflowY: "auto" }}>
+          <h1 style={{ color: "#D4AF37", fontFamily: "serif", margin: "0 0 15px 0", borderBottom: "1px solid #222", paddingBottom: "10px", fontSize: "1.5rem" }}>
             PRODUCTOS
           </h1>
-          <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fill, minmax(180px, 1fr))", gap: "15px" }}>
+          
+          {/* ✅ BARRA DE BÚSQUEDA */}
+          <div style={{ position: "relative", marginBottom: "20px" }}>
+            <FiSearch style={{ position: "absolute", left: "12px", top: "50%", transform: "translateY(-50%)", color: "#D4AF37" }} />
+            <input
+              type="text"
+              placeholder="Buscar por nombre o código..."
+              value={searchTerm}
+              onChange={(e) => setSearchTerm(e.target.value)}
+              style={{
+                width: "100%",
+                padding: "12px 12px 12px 40px",
+                borderRadius: "8px",
+                border: "1px solid #D4AF37",
+                backgroundColor: "#111",
+                color: "#fff",
+                fontSize: "0.9rem",
+                outline: "none"
+              }}
+            />
+          </div>
+
+          <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fill, minmax(140px, 1fr))", gap: "12px" }}>
             {filteredProducts.map((p) => (
               <button
                 key={p.id}
@@ -743,8 +798,8 @@ export default function Venta({ cashDrawer, onCashClosed }) {
                 style={{
                   background: "#111",
                   border: "1px solid #222",
-                  padding: "15px",
-                  borderRadius: "12px",
+                  padding: "12px",
+                  borderRadius: "10px",
                   textAlign: "left",
                   cursor: getAvailableStock(p) <= 0 ? "not-allowed" : "pointer",
                   opacity: getAvailableStock(p) <= 0 ? 0.5 : 1,
@@ -752,66 +807,66 @@ export default function Venta({ cashDrawer, onCashClosed }) {
                   overflow: "hidden"
                 }}
               >
-                <div style={{ fontWeight: "bold", fontSize: "0.9rem", color: "#fff", marginBottom: "5px" }}>{p.name}</div>
-                <div style={{ color: "#D4AF37", fontWeight: "bold", fontSize: "1.1rem" }}>${Number(p.sale_price).toLocaleString()}</div>
-                <div style={{ fontSize: "0.7rem", color: "#666", marginTop: "5px" }}>Stock: {getAvailableStock(p)}</div>
+                <div style={{ fontWeight: "bold", fontSize: "0.8rem", color: "#fff", marginBottom: "4px", lineHeight: "1.2" }}>{p.name}</div>
+                <div style={{ color: "#D4AF37", fontWeight: "bold", fontSize: "1rem" }}>${Number(p.sale_price).toLocaleString()}</div>
+                <div style={{ fontSize: "0.65rem", color: "#666", marginTop: "4px" }}>Stock: {getAvailableStock(p)}</div>
               </button>
             ))}
           </div>
         </div>
       </div>
 
-      {/* CARRITO */}
-      <div style={{ width: "380px", borderLeft: "1px solid #222", display: "flex", flexDirection: "column", backgroundColor: "#080808" }}>
-        <div style={{ padding: "20px", borderBottom: "1px solid #222", color: "#D4AF37", fontWeight: "bold", fontSize: "1.1rem" }}>
-          <FiShoppingCart style={{ marginRight: "8px", verticalAlign: "bottom" }} /> VENTA {activeSaleId}
+      {/* CARRITO - RESPONSIVE */}
+      <div style={{ width: "350px", borderLeft: "1px solid #222", display: "flex", flexDirection: "column", backgroundColor: "#080808" }}>
+        <div style={{ padding: "15px", borderBottom: "1px solid #222", color: "#D4AF37", fontWeight: "bold", fontSize: "1rem" }}>
+          <FiShoppingCart style={{ marginRight: "6px", verticalAlign: "bottom" }} /> VENTA {activeSaleId}
         </div>
 
-        <div style={{ flex: 1, overflowY: "auto", padding: "20px" }}>
+        <div style={{ flex: 1, overflowY: "auto", padding: "15px" }}>
           {cart.map((i) => {
             const itemId = i.cart_id || i.id;
             const previewItem = getPreviewItem(i);
             const hasPromo = previewItem && previewItem.discount_amount > 0;
             
             return (
-              <div key={itemId} style={{ marginBottom: "15px", padding: "10px", background: hasPromo ? "#1a2e1a" : "transparent", borderRadius: "8px", border: hasPromo ? "1px solid #2ecc71" : "none" }}>
-                <div style={{ display: "flex", justifyContent: "space-between", fontSize: "0.9rem", color: "#eee" }}>
+              <div key={itemId} style={{ marginBottom: "12px", padding: "10px", background: hasPromo ? "#1a2e1a" : "transparent", borderRadius: "6px", border: hasPromo ? "1px solid #2ecc71" : "none" }}>
+                <div style={{ display: "flex", justifyContent: "space-between", fontSize: "0.85rem", color: "#eee" }}>
                   <div style={{ flex: 1 }}>
-                    <div style={{ display: "flex", alignItems: "center", gap: "5px" }}>
-                      {i.name}
+                    <div style={{ display: "flex", alignItems: "center", gap: "4px" }}>
+                      <span style={{ fontSize: "0.8rem" }}>{i.name}</span>
                       {hasPromo && (
-                        <span style={{ display: "inline-flex", alignItems: "center", gap: "3px", background: "#2ecc71", color: "#000", padding: "2px 6px", borderRadius: "4px", fontSize: "0.65rem", fontWeight: "bold" }}>
-                          <FiTag size={10} /> PROMO
+                        <span style={{ display: "inline-flex", alignItems: "center", gap: "2px", background: "#2ecc71", color: "#000", padding: "2px 4px", borderRadius: "3px", fontSize: "0.6rem", fontWeight: "bold" }}>
+                          <FiTag size={8} /> PROMO
                         </span>
                       )}
                     </div>
                     {i.is_presentation && (
-                      <div style={{ fontSize: "0.7rem", color: "#2ecc71", marginTop: "2px" }}>
-                        <FiPackage size={10} style={{ verticalAlign: "middle" }} /> {i.units_per_item}u
+                      <div style={{ fontSize: "0.65rem", color: "#2ecc71", marginTop: "2px" }}>
+                        <FiPackage size={8} style={{ verticalAlign: "middle" }} /> {i.units_per_item}u
                       </div>
                     )}
                     {hasPromo && (
-                      <div style={{ fontSize: "0.7rem", color: "#2ecc71", marginTop: "2px" }}>
+                      <div style={{ fontSize: "0.65rem", color: "#2ecc71", marginTop: "2px" }}>
                         Ahorro: ${previewItem.discount_amount.toLocaleString()}
                       </div>
                     )}
                   </div>
-                  <div style={{ display: "flex", alignItems: "center", gap: "8px", margin: "0 10px" }}>
-                    <button onClick={() => decreaseQty(itemId)} style={{ background: "#222", border: "none", color: "#fff", width: "24px", cursor: "pointer", borderRadius: "4px" }}>
+                  <div style={{ display: "flex", alignItems: "center", gap: "6px", margin: "0 8px" }}>
+                    <button onClick={() => decreaseQty(itemId)} style={{ background: "#222", border: "none", color: "#fff", width: "22px", height: "22px", cursor: "pointer", borderRadius: "4px", fontSize: "0.8rem" }}>
                       -
                     </button>
-                    <span>{i.qty}</span>
-                    <button onClick={() => increaseQty(itemId)} style={{ background: "#222", border: "none", color: "#fff", width: "24px", cursor: "pointer", borderRadius: "4px" }}>
+                    <span style={{ fontSize: "0.85rem" }}>{i.qty}</span>
+                    <button onClick={() => increaseQty(itemId)} style={{ background: "#222", border: "none", color: "#fff", width: "22px", height: "22px", cursor: "pointer", borderRadius: "4px", fontSize: "0.8rem" }}>
                       +
                     </button>
                   </div>
                   <div style={{ textAlign: "right" }}>
                     {hasPromo && (
-                      <div style={{ fontSize: "0.7rem", color: "#888", textDecoration: "line-through" }}>
+                      <div style={{ fontSize: "0.65rem", color: "#888", textDecoration: "line-through" }}>
                         ${(i.qty * i.sale_price).toLocaleString()}
                       </div>
                     )}
-                    <div style={{ color: hasPromo ? "#2ecc71" : "#D4AF37", fontWeight: "bold" }}>
+                    <div style={{ color: hasPromo ? "#2ecc71" : "#D4AF37", fontWeight: "bold", fontSize: "0.85rem" }}>
                       ${previewItem ? previewItem.total.toLocaleString() : (i.qty * i.sale_price).toLocaleString()}
                     </div>
                   </div>
@@ -821,51 +876,51 @@ export default function Venta({ cashDrawer, onCashClosed }) {
           })}
         </div>
 
-        <div style={{ padding: "25px", backgroundColor: "#000", borderTop: "1px solid #333" }}>
-          <div style={{ display: "flex", justifyContent: "space-between", color: "#666", fontSize: "0.8rem" }}>
+        <div style={{ padding: "20px", backgroundColor: "#000", borderTop: "1px solid #333" }}>
+          <div style={{ display: "flex", justifyContent: "space-between", color: "#666", fontSize: "0.75rem" }}>
             <span>BASE</span>
             <span>${baseGravable.toLocaleString(undefined, { maximumFractionDigits: 0 })}</span>
           </div>
-          <div style={{ display: "flex", justifyContent: "space-between", color: "#666", fontSize: "0.8rem" }}>
-            <span>IC / IMPOCONSUMO</span>
+          <div style={{ display: "flex", justifyContent: "space-between", color: "#666", fontSize: "0.75rem" }}>
+            <span>IC</span>
             <span>${valorImpuesto.toLocaleString(undefined, { maximumFractionDigits: 0 })}</span>
           </div>
           {promoDiscount > 0 && (
-            <div style={{ display: "flex", justifyContent: "space-between", color: "#2ecc71", fontSize: "0.8rem", fontWeight: "bold" }}>
-              <span>🎉 DESCUENTO PROMOS</span>
+            <div style={{ display: "flex", justifyContent: "space-between", color: "#2ecc71", fontSize: "0.75rem", fontWeight: "bold" }}>
+              <span>🎉 PROMOS</span>
               <span>-${promoDiscount.toLocaleString(undefined, { maximumFractionDigits: 0 })}</span>
             </div>
           )}
-          <div style={{ display: "flex", justifyContent: "space-between", fontSize: "2rem", fontWeight: "bold", color: "#D4AF37", marginTop: "15px", marginBottom: "20px" }}>
+          <div style={{ display: "flex", justifyContent: "space-between", fontSize: "1.8rem", fontWeight: "bold", color: "#D4AF37", marginTop: "12px", marginBottom: "15px" }}>
             <span>TOTAL</span>
             <span>${total.toLocaleString()}</span>
           </div>
 
           {!sale && (
-            <div style={{ marginBottom: "15px", padding: "10px", background: "#111", borderRadius: "8px", border: "1px solid #222" }}>
+            <div style={{ marginBottom: "12px", padding: "10px", background: "#111", borderRadius: "6px", border: "1px solid #222" }}>
               <div
                 onClick={() => updateActiveSale({ isCustomClient: !isCustomClient })}
-                style={{ display: "flex", alignItems: "center", gap: "10px", color: "#fff", cursor: "pointer", fontSize: "0.9rem" }}
+                style={{ display: "flex", alignItems: "center", gap: "8px", color: "#fff", cursor: "pointer", fontSize: "0.85rem" }}
               >
-                {isCustomClient ? <FiCheckSquare color="#D4AF37" size={20} /> : <FiSquare color="#666" size={20} />}
-                <span>Asignar Cliente a Factura</span>
+                {isCustomClient ? <FiCheckSquare color="#D4AF37" size={18} /> : <FiSquare color="#666" size={18} />}
+                <span>Asignar Cliente</span>
               </div>
 
               {isCustomClient && (
-                <div style={{ marginTop: "10px", display: "flex", flexDirection: "column", gap: "8px" }}>
+                <div style={{ marginTop: "10px", display: "flex", flexDirection: "column", gap: "6px" }}>
                   <input
                     type="text"
                     placeholder="Nombre Completo"
                     value={clientName}
                     onChange={(e) => updateActiveSale({ clientName: e.target.value })}
-                    style={{ background: "#000", border: "1px solid #333", color: "#fff", padding: "8px", borderRadius: "4px", outline: "none" }}
+                    style={{ background: "#000", border: "1px solid #333", color: "#fff", padding: "8px", borderRadius: "4px", outline: "none", fontSize: "0.85rem" }}
                   />
                   <input
                     type="text"
                     placeholder="NIT o Cédula"
                     value={clientDoc}
                     onChange={(e) => updateActiveSale({ clientDoc: e.target.value })}
-                    style={{ background: "#000", border: "1px solid #333", color: "#fff", padding: "8px", borderRadius: "4px", outline: "none" }}
+                    style={{ background: "#000", border: "1px solid #333", color: "#fff", padding: "8px", borderRadius: "4px", outline: "none", fontSize: "0.85rem" }}
                   />
                 </div>
               )}
@@ -878,7 +933,7 @@ export default function Venta({ cashDrawer, onCashClosed }) {
               disabled={cart.length === 0}
               style={{
                 width: "100%",
-                padding: "18px",
+                padding: "16px",
                 background: cart.length === 0 ? "#333" : "#D4AF37",
                 border: "none",
                 borderRadius: "8px",
@@ -900,34 +955,34 @@ export default function Venta({ cashDrawer, onCashClosed }) {
                 onChange={(e) => updateActiveSale({ cashReceived: e.target.value })}
                 style={{
                   width: "100%",
-                  padding: "15px",
+                  padding: "14px",
                   background: "#111",
                   border: "2px solid #D4AF37",
                   color: "#fff",
                   borderRadius: "8px",
                   textAlign: "center",
-                  fontSize: "1.5rem",
-                  marginBottom: "15px",
+                  fontSize: "1.3rem",
+                  marginBottom: "12px",
                   outline: "none"
                 }}
               />
-              <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "10px" }}>
+              <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "8px" }}>
                 <button
                   onClick={payCash}
-                  style={{ padding: "15px", background: "#D4AF37", color: "#000", border: "none", borderRadius: "8px", fontWeight: "bold", cursor: "pointer" }}
+                  style={{ padding: "14px", background: "#D4AF37", color: "#000", border: "none", borderRadius: "8px", fontWeight: "bold", cursor: "pointer", fontSize: "0.9rem" }}
                 >
                   EFECTIVO
                 </button>
                 <button
                   onClick={() => setShowQRConfirm(true)}
-                  style={{ padding: "15px", border: "1px solid #32CD32", color: "#32CD32", background: "none", borderRadius: "8px", fontWeight: "bold", cursor: "pointer" }}
+                  style={{ padding: "14px", border: "1px solid #32CD32", color: "#32CD32", background: "none", borderRadius: "8px", fontWeight: "bold", cursor: "pointer", fontSize: "0.9rem" }}
                 >
-                  NEQUI / QR
+                  NEQUI
                 </button>
               </div>
               <button
                 onClick={() => updateActiveSale({ sale: null })}
-                style={{ width: "100%", marginTop: "15px", color: "#666", background: "none", border: "none", cursor: "pointer", textDecoration: "underline" }}
+                style={{ width: "100%", marginTop: "12px", color: "#666", background: "none", border: "none", cursor: "pointer", textDecoration: "underline", fontSize: "0.8rem" }}
               >
                 Cancelar
               </button>
@@ -936,18 +991,18 @@ export default function Venta({ cashDrawer, onCashClosed }) {
         </div>
       </div>
 
-      {/* MODAL DE SELECCIÓN DE PRESENTACIONES */}
+      {/* MODAL PRESENTACIONES */}
       {showPresentationsModal && currentProductPresentations && (
         <div style={{ position: "fixed", inset: 0, background: "rgba(0,0,0,0.95)", display: "flex", alignItems: "center", justifyContent: "center", zIndex: 200, backdropFilter: "blur(10px)" }}>
-          <div style={{ background: "#0a0a0a", maxWidth: "600px", width: "90%", padding: "40px", borderRadius: "30px", border: "2px solid #D4AF37", maxHeight: "80vh", overflowY: "auto" }}>
+          <div style={{ background: "#0a0a0a", maxWidth: "600px", width: "90%", padding: "30px", borderRadius: "20px", border: "2px solid #D4AF37", maxHeight: "80vh", overflowY: "auto" }}>
             
-            <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: "30px" }}>
+            <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: "20px" }}>
               <div>
-                <h2 style={{ color: "#D4AF37", margin: 0, fontSize: "1.8rem" }}>
+                <h2 style={{ color: "#D4AF37", margin: 0, fontSize: "1.5rem" }}>
                   {currentProductPresentations.product_name}
                 </h2>
-                <p style={{ color: "#666", margin: "5px 0 0 0" }}>
-                  Stock disponible: <span style={{ color: "#2ecc71", fontWeight: "bold" }}>{currentProductPresentations.base_stock}</span> unidades
+                <p style={{ color: "#666", margin: "5px 0 0 0", fontSize: "0.85rem" }}>
+                  Stock: <span style={{ color: "#2ecc71", fontWeight: "bold" }}>{currentProductPresentations.base_stock}</span>
                 </p>
               </div>
               <button 
@@ -955,17 +1010,17 @@ export default function Venta({ cashDrawer, onCashClosed }) {
                   setShowPresentationsModal(false);
                   setCurrentProductPresentations(null);
                 }}
-                style={{ background: "#222", border: "none", borderRadius: "50%", width: "45px", height: "45px", cursor: "pointer", display: "flex", alignItems: "center", justifyContent: "center" }}
+                style={{ background: "#222", border: "none", borderRadius: "50%", width: "40px", height: "40px", cursor: "pointer", display: "flex", alignItems: "center", justifyContent: "center" }}
               >
-                <FiX size={24} color="#fff" />
+                <FiX size={20} color="#fff" />
               </button>
             </div>
 
-            <h3 style={{ color: "#888", fontSize: "1rem", marginBottom: "20px", textTransform: "uppercase", letterSpacing: "1px" }}>
+            <h3 style={{ color: "#888", fontSize: "0.9rem", marginBottom: "15px", textTransform: "uppercase", letterSpacing: "1px" }}>
               ¿Cómo lo vendes?
             </h3>
 
-            <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(200px, 1fr))", gap: "20px" }}>
+            <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(180px, 1fr))", gap: "15px" }}>
               {currentProductPresentations.presentations.map((pres) => (
                 <button
                   key={pres.id}
@@ -981,8 +1036,8 @@ export default function Venta({ cashDrawer, onCashClosed }) {
                   style={{
                     background: "linear-gradient(135deg, #1a1a1a 0%, #0a0a0a 100%)",
                     border: "2px solid #D4AF37",
-                    borderRadius: "20px",
-                    padding: "30px 20px",
+                    borderRadius: "15px",
+                    padding: "25px 15px",
                     cursor: "pointer",
                     transition: "all 0.3s",
                     textAlign: "center"
@@ -996,18 +1051,18 @@ export default function Venta({ cashDrawer, onCashClosed }) {
                     e.currentTarget.style.borderColor = "#D4AF37";
                   }}
                 >
-                  <div style={{ fontSize: "1.4rem", fontWeight: "bold", color: "#D4AF37", marginBottom: "10px" }}>
+                  <div style={{ fontSize: "1.2rem", fontWeight: "bold", color: "#D4AF37", marginBottom: "8px" }}>
                     {pres.presentation_name}
                   </div>
                   
-                  <div style={{ display: "flex", alignItems: "center", justifyContent: "center", gap: "8px", color: "#2ecc71", marginBottom: "15px" }}>
-                    <FiPackage size={20} />
-                    <span style={{ fontSize: "1.1rem", fontWeight: "bold" }}>
-                      {pres.quantity} {pres.quantity === 1 ? 'unidad' : 'unidades'}
+                  <div style={{ display: "flex", alignItems: "center", justifyContent: "center", gap: "6px", color: "#2ecc71", marginBottom: "12px" }}>
+                    <FiPackage size={18} />
+                    <span style={{ fontSize: "1rem", fontWeight: "bold" }}>
+                      {pres.quantity} {pres.quantity === 1 ? 'ud' : 'uds'}
                     </span>
                   </div>
 
-                  <div style={{ fontSize: "2rem", fontWeight: "bold", color: "#fff" }}>
+                  <div style={{ fontSize: "1.8rem", fontWeight: "bold", color: "#fff" }}>
                     ${Number(pres.sale_price).toLocaleString()}
                   </div>
                 </button>
@@ -1019,13 +1074,13 @@ export default function Venta({ cashDrawer, onCashClosed }) {
 
       {showQRConfirm && (
         <div style={{ position: "fixed", inset: 0, background: "rgba(0,0,0,0.9)", display: "flex", alignItems: "center", justifyContent: "center", zIndex: 100 }}>
-          <div style={{ background: "#111", padding: "30px", border: "1px solid #D4AF37", borderRadius: "15px", textAlign: "center" }}>
-            <p style={{ color: "#fff", marginBottom: "20px" }}>¿Confirmas que recibiste la transferencia?</p>
+          <div style={{ background: "#111", padding: "25px", border: "1px solid #D4AF37", borderRadius: "12px", textAlign: "center" }}>
+            <p style={{ color: "#fff", marginBottom: "15px" }}>¿Confirmas la transferencia?</p>
             <div style={{ display: "flex", gap: "10px" }}>
-              <button onClick={() => setShowQRConfirm(false)} style={{ padding: "10px 20px", background: "#333", color: "#fff", border: "none", borderRadius: "5px" }}>
+              <button onClick={() => setShowQRConfirm(false)} style={{ padding: "10px 18px", background: "#333", color: "#fff", border: "none", borderRadius: "5px", cursor: "pointer" }}>
                 Cancelar
               </button>
-              <button onClick={confirmQRPayment} style={{ padding: "10px 20px", background: "#D4AF37", border: "none", borderRadius: "5px", fontWeight: "bold" }}>
+              <button onClick={confirmQRPayment} style={{ padding: "10px 18px", background: "#D4AF37", border: "none", borderRadius: "5px", fontWeight: "bold", cursor: "pointer" }}>
                 CONFIRMAR
               </button>
             </div>
