@@ -61,6 +61,27 @@ export default function Venta({ cashDrawer, onCashClosed }) {
     ));
   }, [activeSaleId]);
 
+  // ✅ HEARTBEAT - PREVENIR CIERRE DE SESIÓN POR INACTIVIDAD
+  useEffect(() => {
+    console.log("🔒 Sistema anti-cierre de sesión activado");
+    
+    const keepSessionAlive = setInterval(async () => {
+      try {
+        // Hace una petición ligera cada 5 minutos para mantener el token activo
+        await api.get("/categories");
+        console.log("✅ Sesión renovada -", new Date().toLocaleTimeString());
+      } catch (error) {
+        // Si falla, lo intentamos de nuevo en el próximo ciclo
+        console.warn("⚠️ Error renovando sesión, reintentando...");
+      }
+    }, 5 * 60 * 1000); // Cada 5 minutos
+
+    return () => {
+      clearInterval(keepSessionAlive);
+      console.log("🔓 Sistema anti-cierre desactivado");
+    };
+  }, []);
+
   useEffect(() => {
     try {
       const userStored = localStorage.getItem("user");
@@ -253,7 +274,6 @@ export default function Venta({ cashDrawer, onCashClosed }) {
     }
   }, [activeSaleId, getAvailableStock, addPresentationToCart]);
 
-  // ✅ SCANNER CON DEPENDENCIAS CORRECTAS
   useEffect(() => {
     const handleBarcodeScan = async (codeRaw) => {
       const code = String(codeRaw || "").trim();
@@ -331,7 +351,7 @@ export default function Venta({ cashDrawer, onCashClosed }) {
 
     window.addEventListener("keydown", onKeyDown);
     return () => window.removeEventListener("keydown", onKeyDown);
-  }, [products, addProduct, addPresentationToCart]); // ✅ Dependencias correctas
+  }, [products, addProduct, addPresentationToCart]);
 
   const increaseQty = (cartId) => {
     updateActiveSale({
@@ -609,7 +629,6 @@ export default function Venta({ cashDrawer, onCashClosed }) {
   return (
     <div style={{ display: "flex", height: "100vh", backgroundColor: "#000", overflow: "hidden" }}>
       
-      {/* SIDEBAR */}
       <div style={{ width: "200px", borderRight: "1px solid #D4AF37", padding: "15px", display: "flex", flexDirection: "column", background: "#050505" }}>
         <h3 style={{ color: "#D4AF37", fontSize: "0.75rem", marginBottom: "15px", letterSpacing: "1px" }}>CATEGORÍAS</h3>
         <div style={{ flex: 1, overflowY: "auto" }}>
@@ -688,10 +707,8 @@ export default function Venta({ cashDrawer, onCashClosed }) {
         </div>
       </div>
 
-      {/* PRODUCTOS */}
       <div style={{ flex: 1, display: "flex", flexDirection: "column" }}>
         
-        {/* TABS */}
         <div style={{ borderBottom: "1px solid #222", background: "#050505", padding: "8px 15px", display: "flex", gap: "8px", overflowX: "auto" }}>
           {sales.map((s) => (
             <div
@@ -782,7 +799,6 @@ export default function Venta({ cashDrawer, onCashClosed }) {
           </button>
         </div>
 
-        {/* PRODUCTOS */}
         <div style={{ flex: 1, padding: "15px", overflowY: "auto" }}>
           <h1 style={{ color: "#D4AF37", fontFamily: "serif", margin: "0 0 15px 0", borderBottom: "1px solid #222", paddingBottom: "10px", fontSize: "1.5rem" }}>
             PRODUCTOS
@@ -833,10 +849,6 @@ export default function Venta({ cashDrawer, onCashClosed }) {
         </div>
       </div>
 
-      {/* CARRITO... resto del código igual que antes */}
-      {/* (El código del carrito, modales, etc. permanece exactamente igual) */}
-
-{/* CARRITO - RESPONSIVE */}
       <div style={{ width: "350px", borderLeft: "1px solid #222", display: "flex", flexDirection: "column", backgroundColor: "#080808" }}>
         <div style={{ padding: "15px", borderBottom: "1px solid #222", color: "#D4AF37", fontWeight: "bold", fontSize: "1rem" }}>
           <FiShoppingCart style={{ marginRight: "6px", verticalAlign: "bottom" }} /> VENTA {activeSaleId}
@@ -1011,7 +1023,6 @@ export default function Venta({ cashDrawer, onCashClosed }) {
         </div>
       </div>
 
-      {/* MODAL PRESENTACIONES */}
       {showPresentationsModal && currentProductPresentations && (
         <div style={{ position: "fixed", inset: 0, background: "rgba(0,0,0,0.95)", display: "flex", alignItems: "center", justifyContent: "center", zIndex: 200, backdropFilter: "blur(10px)" }}>
           <div style={{ background: "#0a0a0a", maxWidth: "600px", width: "90%", padding: "30px", borderRadius: "20px", border: "2px solid #D4AF37", maxHeight: "80vh", overflowY: "auto" }}>
