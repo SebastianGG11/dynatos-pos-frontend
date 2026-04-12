@@ -61,17 +61,54 @@ export default function Venta({ cashDrawer, onCashClosed }) {
     ));
   }, [activeSaleId]);
 
+  // ✅ PERSISTENCIA: Cargar carritos guardados al iniciar
+  useEffect(() => {
+    const savedSales = localStorage.getItem("dynatos_sales");
+    if (savedSales) {
+      try {
+        const parsed = JSON.parse(savedSales);
+        setSales(parsed.sales || [
+          {
+            id: 1,
+            customName: "",
+            cart: [],
+            sale: null,
+            preview: null,
+            cashReceived: "",
+            isCustomClient: false,
+            clientName: "",
+            clientDoc: ""
+          }
+        ]);
+        setActiveSaleId(parsed.activeSaleId || 1);
+        setNextSaleId(parsed.nextSaleId || 2);
+        console.log("🔄 Carritos recuperados desde localStorage");
+      } catch (e) {
+        console.error("Error cargando carritos:", e);
+      }
+    }
+  }, []); // Solo al montar el componente
+
+  // ✅ PERSISTENCIA: Guardar carritos automáticamente cada vez que cambien
+  useEffect(() => {
+    const dataToSave = {
+      sales,
+      activeSaleId,
+      nextSaleId
+    };
+    localStorage.setItem("dynatos_sales", JSON.stringify(dataToSave));
+    console.log("💾 Carritos guardados automáticamente");
+  }, [sales, activeSaleId, nextSaleId]);
+
   // ✅ HEARTBEAT - PREVENIR CIERRE DE SESIÓN POR INACTIVIDAD
   useEffect(() => {
     console.log("🔒 Sistema anti-cierre de sesión activado");
     
     const keepSessionAlive = setInterval(async () => {
       try {
-        // Hace una petición ligera cada 5 minutos para mantener el token activo
         await api.get("/categories");
         console.log("✅ Sesión renovada -", new Date().toLocaleTimeString());
       } catch (error) {
-        // Si falla, lo intentamos de nuevo en el próximo ciclo
         console.warn("⚠️ Error renovando sesión, reintentando...");
       }
     }, 5 * 60 * 1000); // Cada 5 minutos
@@ -554,6 +591,12 @@ export default function Venta({ cashDrawer, onCashClosed }) {
     setTimeout(() => {
       closeSale(activeSaleId);
       loadAll();
+      
+      // ✅ PERSISTENCIA: Limpiar localStorage solo si no quedan ventas
+      if (sales.length === 1) {
+        localStorage.removeItem("dynatos_sales");
+        console.log("🗑️ Carritos limpiados de localStorage");
+      }
     }, 1000);
   };
 
