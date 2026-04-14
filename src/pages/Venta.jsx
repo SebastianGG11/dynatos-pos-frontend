@@ -254,9 +254,9 @@ export default function Venta({ cashDrawer, onCashClosed }) {
           } else {
             newCart = [...currentSale.cart, { 
               ...p, 
-              cart_id: `prod-${p.id}-${Date.now()}`, // ✅ ID único con timestamp
-              qty: 1,
-              is_presentation: false  
+              cart_id: `prod-${p.id}-${Date.now()}`,
+              qty: 1, 
+              is_presentation: false 
             }];
           }
 
@@ -308,11 +308,12 @@ export default function Venta({ cashDrawer, onCashClosed }) {
         } else {
           newCart = [...currentSale.cart, { 
             ...p, 
-            cart_id: `prod-${p.id}-${Date.now()}`, // ✅ ID único con timestamp
+            cart_id: `prod-${p.id}-${Date.now()}`,
             qty: 1, 
             is_presentation: false 
           }];
         }
+
         return prevSales.map(s => 
           s.id === activeSaleId ? { ...s, cart: newCart } : s
         );
@@ -672,12 +673,6 @@ export default function Venta({ cashDrawer, onCashClosed }) {
     }
   };
 
-  const getPreviewItem = (cartItem) => {
-    if (!preview?.items) return null;
-    const productId = cartItem.product_id || cartItem.id;
-    return preview.items.find(pi => pi.product_id === productId);
-  };
-
   return (
     <div style={{ display: "flex", height: "100vh", backgroundColor: "#000", overflow: "hidden" }}>
       
@@ -907,10 +902,10 @@ export default function Venta({ cashDrawer, onCashClosed }) {
         </div>
 
         <div style={{ flex: 1, overflowY: "auto", padding: "15px" }}>
-          {cart.map((i) => {
-            // ✅ FIX: Key única que previene reutilización de componentes
-            const itemId = i.cart_id; // ✅ Ahora TODOS tienen cart_id único
-            const previewItem = getPreviewItem(i);
+          {cart.map((i, index) => {
+            // ✅ FIX: Buscar preview por índice, no por product_id
+            const itemId = i.cart_id || `item-${i.id}-${index}`;
+            const previewItem = preview?.items?.[index] || null;
             const hasPromo = previewItem && previewItem.discount_amount > 0;
             
             return (
