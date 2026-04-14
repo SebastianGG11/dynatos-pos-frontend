@@ -1,6 +1,6 @@
 import { useState, useEffect } from "react";
 import api from "../api/api";
-import { FiPlus, FiTrash2, FiAlertCircle, FiFileText } from "react-icons/fi";
+import { FiPlus, FiTrash2, FiAlertCircle, FiFileText, FiX } from "react-icons/fi";
 
 export default function AdminPurchases() {
   const [purchases, setPurchases] = useState([]);
@@ -12,9 +12,13 @@ export default function AdminPurchases() {
   const [form, setForm] = useState({
     supplier_name: "",
     invoice_number: "",
-    total_amount: "",
-    notes: "" // 👈 AQUÍ ESTÁ TU DESCRIPCIÓN
+    notes: ""
   });
+
+  // ✅ NUEVA FUNCIONALIDAD: Lista de productos
+  const [products, setProducts] = useState([
+    { id: Date.now(), name: "", quantity: "", unit_price: "" }
+  ]);
 
   useEffect(() => {
     loadPurchases();
@@ -38,25 +42,68 @@ export default function AdminPurchases() {
     setForm(prev => ({ ...prev, [name]: value }));
   };
 
+  // ✅ Agregar producto a la lista
+  const addProduct = () => {
+    setProducts([...products, { id: Date.now(), name: "", quantity: "", unit_price: "" }]);
+  };
+
+  // ✅ Actualizar datos de un producto
+  const updateProduct = (id, field, value) => {
+    setProducts(products.map(p => 
+      p.id === id ? { ...p, [field]: value } : p
+    ));
+  };
+
+  // ✅ Eliminar producto de la lista
+  const removeProduct = (id) => {
+    if (products.length === 1) return; // Mantener al menos 1
+    setProducts(products.filter(p => p.id !== id));
+  };
+
+  // ✅ Calcular total automáticamente
+  const calculateTotal = () => {
+    return products.reduce((sum, p) => {
+      const qty = Number(p.quantity) || 0;
+      const price = Number(p.unit_price) || 0;
+      return sum + (qty * price);
+    }, 0);
+  };
+
   const savePurchase = async () => {
     setUiError("");
-    if (!form.supplier_name || !form.total_amount) {
-      return setUiError("El Proveedor y el Monto son obligatorios");
+    if (!form.supplier_name) {
+      return setUiError("El Proveedor es obligatorio");
+    }
+
+    // Validar que haya al menos un producto con datos
+    const validProducts = products.filter(p => p.name && p.quantity && p.unit_price);
+    if (validProducts.length === 0) {
+      return setUiError("Debes agregar al menos un producto con nombre, cantidad y precio");
     }
 
     setSaving(true);
     try {
-      // Enviamos TODO el formulario, incluyendo las notas
+      const total = calculateTotal();
+      
+      // Guardar productos en el campo notes como JSON
+      const productDetails = validProducts.map(p => 
+        `${p.quantity}x ${p.name} @ $${Number(p.unit_price).toLocaleString()}`
+      ).join("\n");
+
       await api.post("/purchases", {
-        ...form,
-        total_amount: Number(form.total_amount)
+        supplier_name: form.supplier_name,
+        invoice_number: form.invoice_number,
+        total_amount: total,
+        notes: `${form.notes ? form.notes + "\n\n" : ""}PRODUCTOS:\n${productDetails}`
       });
+
       await loadPurchases();
       setShowForm(false);
-      setForm({ supplier_name: "", invoice_number: "", total_amount: "", notes: "" });
+      setForm({ supplier_name: "", invoice_number: "", notes: "" });
+      setProducts([{ id: Date.now(), name: "", quantity: "", unit_price: "" }]);
       alert("¡Compra registrada con éxito!");
     } catch (err) {
-      setUiError("Error al guardar: Verifica que el servidor tenga la ruta /purchases y la tabla en la DB.");
+      setUiError("Error al guardar la compra.");
     } finally {
       setSaving(false);
     }
@@ -106,12 +153,13 @@ export default function AdminPurchases() {
       {/* FORMULARIO MODAL */}
       {showForm && (
         <div style={{ position: "fixed", inset: 0, backgroundColor: "rgba(0,0,0,0.95)", zIndex: 2000, display: "flex", alignItems: "center", justifyContent: "center", padding: "20px" }}>
-          <div style={{ backgroundColor: "#111", border: "1px solid #D4AF37", padding: "40px", borderRadius: "20px", width: "100%", maxWidth: "600px" }}>
-            <h3 style={{ color: "#D4AF37", marginTop: 0, marginBottom: "30px", fontSize: "1.5rem" }}>DATOS DE LA COMPRA</h3>
+          <div style={{ backgroundColor: "#111", border: "1px solid #D4AF37", padding: "40px", borderRadius: "20px", width: "100%", maxWidth: "900px", maxHeight: "90vh", overflowY: "auto" }}>
+            <h3 style={{ color: "#D4AF37", marginTop: 0, marginBottom: "30px", fontSize: "1.5rem" }}>REGISTRAR COMPRA</h3>
             
-            <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "20px" }}>
+            {/* INFORMACIÓN GENERAL */}
+            <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "20px", marginBottom: "30px" }}>
               <div style={{ gridColumn: "span 2" }}>
-                <label style={{ color: "#D4AF37", fontSize: "0.8rem", display: "block", marginBottom: "5px" }}>PROVEEDOR</label>
+                <label style={{ color: "#D4AF37", fontSize: "0.8rem", display: "block", marginBottom: "5px" }}>PROVEEDOR *</label>
                 <input name="supplier_name" value={form.supplier_name} onChange={handleChange} placeholder="Ej: Distribuidora Central" style={{ width: "100%", padding: "12px", borderRadius: "8px", border: "1px solid #333", backgroundColor: "#000", color: "#fff" }} />
               </div>
               <div>
@@ -119,25 +167,73 @@ export default function AdminPurchases() {
                 <input name="invoice_number" value={form.invoice_number} onChange={handleChange} placeholder="Opcional" style={{ width: "100%", padding: "12px", borderRadius: "8px", border: "1px solid #333", backgroundColor: "#000", color: "#fff" }} />
               </div>
               <div>
-                <label style={{ color: "#D4AF37", fontSize: "0.8rem", display: "block", marginBottom: "5px" }}>MONTO TOTAL</label>
-                <input name="total_amount" type="number" value={form.total_amount} onChange={handleChange} placeholder="0" style={{ width: "100%", padding: "12px", borderRadius: "8px", border: "1px solid #333", backgroundColor: "#000", color: "#fff" }} />
-              </div>
-              
-              {/* CAMPO DE DESCRIPCIÓN (NOTAS) */}
-              <div style={{ gridColumn: "span 2" }}>
-                <label style={{ color: "#D4AF37", fontSize: "0.8rem", display: "block", marginBottom: "5px" }}>DETALLES DE LA COMPRA (DESCRIPCIÓN)</label>
-                <textarea 
-                  name="notes" 
-                  value={form.notes} 
-                  onChange={handleChange} 
-                  placeholder="Escribe aquí los productos comprados, cantidades o cualquier observación..."
-                  rows="4"
-                  style={{ width: "100%", padding: "12px", borderRadius: "8px", border: "1px solid #333", backgroundColor: "#000", color: "#fff", resize: "none", fontFamily: "inherit" }}
-                />
+                <label style={{ color: "#D4AF37", fontSize: "0.8rem", display: "block", marginBottom: "5px" }}>TOTAL CALCULADO</label>
+                <div style={{ padding: "12px", borderRadius: "8px", border: "2px solid #D4AF37", backgroundColor: "#000", color: "#D4AF37", fontSize: "1.2rem", fontWeight: "bold" }}>
+                  {money(calculateTotal())}
+                </div>
               </div>
             </div>
 
-            <div style={{ display: "flex", gap: "15px", marginTop: "30px" }}>
+            {/* LISTA DE PRODUCTOS */}
+            <div style={{ marginBottom: "20px" }}>
+              <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: "15px" }}>
+                <label style={{ color: "#D4AF37", fontSize: "0.9rem", fontWeight: "bold" }}>PRODUCTOS *</label>
+                <button onClick={addProduct} style={{ background: "#2ecc71", color: "#000", border: "none", padding: "8px 15px", borderRadius: "6px", fontWeight: "bold", cursor: "pointer", display: "flex", alignItems: "center", gap: "5px" }}>
+                  <FiPlus size={16} /> AGREGAR PRODUCTO
+                </button>
+              </div>
+
+              <div style={{ background: "#0a0a0a", padding: "15px", borderRadius: "10px", border: "1px solid #222" }}>
+                {products.map((product, index) => (
+                  <div key={product.id} style={{ display: "grid", gridTemplateColumns: "2fr 1fr 1fr auto", gap: "10px", marginBottom: "10px", alignItems: "center" }}>
+                    <input
+                      type="text"
+                      value={product.name}
+                      onChange={(e) => updateProduct(product.id, "name", e.target.value)}
+                      placeholder="Nombre del producto"
+                      style={{ padding: "10px", borderRadius: "6px", border: "1px solid #333", backgroundColor: "#000", color: "#fff" }}
+                    />
+                    <input
+                      type="number"
+                      value={product.quantity}
+                      onChange={(e) => updateProduct(product.id, "quantity", e.target.value)}
+                      placeholder="Cantidad"
+                      style={{ padding: "10px", borderRadius: "6px", border: "1px solid #333", backgroundColor: "#000", color: "#fff" }}
+                    />
+                    <input
+                      type="number"
+                      value={product.unit_price}
+                      onChange={(e) => updateProduct(product.id, "unit_price", e.target.value)}
+                      placeholder="Precio c/u"
+                      style={{ padding: "10px", borderRadius: "6px", border: "1px solid #333", backgroundColor: "#000", color: "#fff" }}
+                    />
+                    <button
+                      onClick={() => removeProduct(product.id)}
+                      disabled={products.length === 1}
+                      style={{ background: "transparent", border: "1px solid #f55", color: "#f55", padding: "10px", borderRadius: "6px", cursor: products.length === 1 ? "not-allowed" : "pointer", opacity: products.length === 1 ? 0.3 : 1 }}
+                    >
+                      <FiX size={18} />
+                    </button>
+                  </div>
+                ))}
+              </div>
+            </div>
+
+            {/* NOTAS ADICIONALES */}
+            <div style={{ marginBottom: "30px" }}>
+              <label style={{ color: "#D4AF37", fontSize: "0.8rem", display: "block", marginBottom: "5px" }}>NOTAS ADICIONALES</label>
+              <textarea 
+                name="notes" 
+                value={form.notes} 
+                onChange={handleChange} 
+                placeholder="Observaciones opcionales..."
+                rows="3"
+                style={{ width: "100%", padding: "12px", borderRadius: "8px", border: "1px solid #333", backgroundColor: "#000", color: "#fff", resize: "none", fontFamily: "inherit" }}
+              />
+            </div>
+
+            {/* BOTONES */}
+            <div style={{ display: "flex", gap: "15px" }}>
               <button onClick={() => setShowForm(false)} style={{ flex: 1, padding: "12px", borderRadius: "8px", border: "1px solid #333", backgroundColor: "transparent", color: "#888", cursor: "pointer" }}>CANCELAR</button>
               <button onClick={savePurchase} disabled={saving} style={{ flex: 1, padding: "12px", borderRadius: "8px", border: "none", backgroundColor: "#D4AF37", color: "#000", fontWeight: "bold", cursor: "pointer" }}>
                 {saving ? "PROCESANDO..." : "REGISTRAR COMPRA"}
@@ -167,7 +263,7 @@ export default function AdminPurchases() {
                 <tr key={p.id} style={{ borderBottom: "1px solid #222" }}>
                   <td style={{ padding: "20px" }}>{new Date(p.created_at).toLocaleDateString()}</td>
                   <td style={{ padding: "20px", fontWeight: "bold" }}>{p.supplier_name}</td>
-                  <td style={{ padding: "20px", color: "#888", fontSize: "0.85rem" }}>
+                  <td style={{ padding: "20px", color: "#888", fontSize: "0.85rem", whiteSpace: "pre-line" }}>
                     {p.notes || "Sin descripción"}
                   </td>
                   <td style={{ padding: "20px", textAlign: "right", color: "#D4AF37", fontWeight: "bold" }}>{money(p.total_amount)}</td>
