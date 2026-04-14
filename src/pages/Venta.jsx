@@ -252,7 +252,12 @@ export default function Venta({ cashDrawer, onCashClosed }) {
               item.id === p.id && !item.is_presentation ? { ...item, qty: item.qty + 1 } : item
             );
           } else {
-            newCart = [...currentSale.cart, { ...p, qty: 1, is_presentation: false }];
+            newCart = [...currentSale.cart, { 
+              ...p, 
+              cart_id: `prod-${p.id}-${Date.now()}`, // ✅ ID único con timestamp
+              qty: 1,
+              is_presentation: false  
+            }];
           }
 
           return prevSales.map(s => 
@@ -301,9 +306,13 @@ export default function Venta({ cashDrawer, onCashClosed }) {
             item.id === p.id && !item.is_presentation ? { ...item, qty: item.qty + 1 } : item
           );
         } else {
-          newCart = [...currentSale.cart, { ...p, qty: 1, is_presentation: false }];
+          newCart = [...currentSale.cart, { 
+            ...p, 
+            cart_id: `prod-${p.id}-${Date.now()}`, // ✅ ID único con timestamp
+            qty: 1, 
+            is_presentation: false 
+          }];
         }
-
         return prevSales.map(s => 
           s.id === activeSaleId ? { ...s, cart: newCart } : s
         );
@@ -900,7 +909,7 @@ export default function Venta({ cashDrawer, onCashClosed }) {
         <div style={{ flex: 1, overflowY: "auto", padding: "15px" }}>
           {cart.map((i) => {
             // ✅ FIX: Key única que previene reutilización de componentes
-            const itemId = i.is_presentation ? `pres-${i.cart_id}` : `prod-${i.id}`;
+            const itemId = i.cart_id; // ✅ Ahora TODOS tienen cart_id único
             const previewItem = getPreviewItem(i);
             const hasPromo = previewItem && previewItem.discount_amount > 0;
             
