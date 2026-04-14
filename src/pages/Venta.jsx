@@ -87,7 +87,7 @@ export default function Venta({ cashDrawer, onCashClosed }) {
         console.error("Error cargando carritos:", e);
       }
     }
-  }, []); // Solo al montar el componente
+  }, []);
 
   // ✅ PERSISTENCIA: Guardar carritos automáticamente cada vez que cambien
   useEffect(() => {
@@ -111,7 +111,7 @@ export default function Venta({ cashDrawer, onCashClosed }) {
       } catch (error) {
         console.warn("⚠️ Error renovando sesión, reintentando...");
       }
-    }, 5 * 60 * 1000); // Cada 5 minutos
+    }, 5 * 60 * 1000);
 
     return () => {
       clearInterval(keepSessionAlive);
@@ -899,7 +899,8 @@ export default function Venta({ cashDrawer, onCashClosed }) {
 
         <div style={{ flex: 1, overflowY: "auto", padding: "15px" }}>
           {cart.map((i) => {
-            const itemId = i.cart_id || i.id;
+            // ✅ FIX: Key única que previene reutilización de componentes
+            const itemId = i.is_presentation ? `pres-${i.cart_id}` : `prod-${i.id}`;
             const previewItem = getPreviewItem(i);
             const hasPromo = previewItem && previewItem.discount_amount > 0;
             
@@ -927,11 +928,11 @@ export default function Venta({ cashDrawer, onCashClosed }) {
                     )}
                   </div>
                   <div style={{ display: "flex", alignItems: "center", gap: "6px", margin: "0 8px" }}>
-                    <button onClick={() => decreaseQty(itemId)} style={{ background: "#222", border: "none", color: "#fff", width: "22px", height: "22px", cursor: "pointer", borderRadius: "4px", fontSize: "0.8rem" }}>
+                    <button onClick={() => decreaseQty(i.cart_id || i.id)} style={{ background: "#222", border: "none", color: "#fff", width: "22px", height: "22px", cursor: "pointer", borderRadius: "4px", fontSize: "0.8rem" }}>
                       -
                     </button>
                     <span style={{ fontSize: "0.85rem" }}>{i.qty}</span>
-                    <button onClick={() => increaseQty(itemId)} style={{ background: "#222", border: "none", color: "#fff", width: "22px", height: "22px", cursor: "pointer", borderRadius: "4px", fontSize: "0.8rem" }}>
+                    <button onClick={() => increaseQty(i.cart_id || i.id)} style={{ background: "#222", border: "none", color: "#fff", width: "22px", height: "22px", cursor: "pointer", borderRadius: "4px", fontSize: "0.8rem" }}>
                       +
                     </button>
                   </div>
