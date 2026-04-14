@@ -352,7 +352,8 @@ export default function AdminPromotionsV2() {
                           onChange={(e) => updateCondition(idx, 'condition_type', e.target.value)}
                           style={{ width: "100%", padding: "10px", borderRadius: "6px", border: "1px solid #333", backgroundColor: "#000", color: "#fff", fontSize: "0.85rem" }}
                         >
-                          <option value="MIN_QUANTITY">Cantidad Mínima</option>
+                          <option value="MIN_QUANTITY">Cantidad Mínima (2+)</option>
+                          <option value="EXACT_QUANTITY">Cantidad Exacta (solo 2)</option>
                           <option value="MIN_AMOUNT">Monto Mínimo</option>
                           <option value="PRODUCT_IN_CART">Producto en Carrito</option>
                           <option value="CATEGORY_IN_CART">Categoría en Carrito</option>
@@ -402,15 +403,22 @@ export default function AdminPromotionsV2() {
                     )}
 
                     <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "10px" }}>
-                      {(cond.condition_type === 'MIN_QUANTITY' || cond.condition_type === 'PRODUCT_IN_CART') && (
+                      {(cond.condition_type === 'MIN_QUANTITY' || cond.condition_type === 'EXACT_QUANTITY' || cond.condition_type === 'PRODUCT_IN_CART') && (
                         <div>
-                          <label style={{ color: "#888", fontSize: "0.7rem", display: "block", marginBottom: "5px" }}>Cantidad Mínima</label>
+                          <label style={{ color: "#888", fontSize: "0.7rem", display: "block", marginBottom: "5px" }}>
+                            {cond.condition_type === 'EXACT_QUANTITY' ? 'Cantidad Exacta' : 'Cantidad Mínima'}
+                          </label>
                           <input 
                             type="number"
                             value={cond.min_quantity}
                             onChange={(e) => updateCondition(idx, 'min_quantity', e.target.value)}
                             style={{ width: "100%", padding: "10px", borderRadius: "6px", border: "1px solid #333", backgroundColor: "#000", color: "#fff", fontSize: "0.85rem" }}
                           />
+                          {cond.condition_type === 'EXACT_QUANTITY' && (
+                            <small style={{ color: "#2ecc71", fontSize: "0.65rem", display: "block", marginTop: "4px" }}>
+                              ⚠️ Solo aplica cuando la cantidad sea EXACTAMENTE este número
+                            </small>
+                          )}
                         </div>
                       )}
 
@@ -594,6 +602,7 @@ export default function AdminPromotionsV2() {
                       p.conditions.map((c, i) => (
                         <div key={i} style={{ marginBottom: "4px" }}>
                           • {c.condition_type === 'MIN_QUANTITY' && `Min ${c.min_quantity}x`}
+                          {c.condition_type === 'EXACT_QUANTITY' && `Exacto ${c.min_quantity}x`}
                           {c.condition_type === 'MIN_AMOUNT' && `Min $${c.min_amount}`}
                           {c.condition_type === 'PRODUCT_IN_CART' && 'Producto en carrito'}
                           {c.condition_type === 'CATEGORY_IN_CART' && 'Categoría en carrito'}
