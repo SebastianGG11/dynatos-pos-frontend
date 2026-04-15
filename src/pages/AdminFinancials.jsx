@@ -1,6 +1,6 @@
 import { useState, useEffect } from "react";
 import api from "../api/api";
-import { FiTrendingUp, FiTrendingDown, FiCalendar, FiDownload, FiPieChart, FiMinusCircle, FiShoppingCart } from "react-icons/fi";
+import { FiTrendingUp, FiTrendingDown, FiCalendar, FiDownload, FiPieChart, FiMinusCircle, FiShoppingCart, FiPackage, FiDollarSign } from "react-icons/fi";
 import ExcelJS from "exceljs";
 import { saveAs } from "file-saver";
 
@@ -18,7 +18,11 @@ export default function AdminFinancials() {
     try {
       const res = await api.get("/reports/financials", { params: { startDate, endDate } });
       setData(res.data);
-    } catch (error) { console.error("Error cargando finanzas:", error); } finally { setLoading(false); }
+    } catch (error) { 
+      console.error("Error cargando finanzas:", error); 
+    } finally { 
+      setLoading(false); 
+    }
   };
 
   const exportFinancialExcel = async () => {
@@ -52,17 +56,14 @@ export default function AdminFinancials() {
       [],
       ['(=) UTILIDAD NETA REAL', '', '', Number(data.net_profit)],
       [],
-      ['📊 INVERSIÓN TOTAL HISTÓRICA', '', '', Number(data.total_investment)],
+      ['📊 INVERSIÓN ACTUAL (INVENTARIO)', '', '', Number(data.current_investment)],
+      ['📊 COMPRAS TOTALES (HISTÓRICO)', '', '', Number(data.total_purchases)],
     ];
 
     rows.forEach(r => {
       const row = sheet.addRow(r);
       row.getCell(4).numFmt = '"$"#,##0.00';
     });
-
-    const lastRow = sheet.getRow(sheet.lastRow.number - 2);
-    lastRow.font = { bold: true, size: 14, color: { argb: 'FF000000' } };
-    lastRow.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: 'FFD4AF37' } };
 
     sheet.getColumn(1).width = 40;
     sheet.getColumn(4).width = 25;
@@ -74,7 +75,7 @@ export default function AdminFinancials() {
   if (!data) return <div className="p-10 text-center text-white">Cargando contabilidad...</div>;
 
   return (
-    <div style={{ maxWidth: "1200px", margin: "0 auto", padding: "20px", animation: "fadeIn 0.5s" }}>
+    <div style={{ maxWidth: "1400px", margin: "0 auto", padding: "20px", animation: "fadeIn 0.5s" }}>
       
       {/* HEADER */}
       <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: "30px", borderBottom: "1px solid #333", paddingBottom: "20px" }}>
@@ -99,7 +100,7 @@ export default function AdminFinancials() {
       </div>
 
       {/* TARJETAS PRINCIPALES */}
-      <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(280px, 1fr))", gap: "20px", marginBottom: "30px" }}>
+      <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(240px, 1fr))", gap: "20px", marginBottom: "30px" }}>
         
         {/* VENTAS NETAS */}
         <div style={{ background: "#1a1a1a", padding: "25px", borderRadius: "15px", borderLeft: "5px solid #2ecc71" }}>
@@ -131,20 +132,30 @@ export default function AdminFinancials() {
             <p style={{ fontSize: "0.75rem", color: "#666", marginTop: "5px" }}>Luz, Nómina, etc.</p>
         </div>
 
-        {/* 🔥 INVERSIÓN TOTAL (NUEVA TARJETA) */}
+        {/* 🔥 INVERSIÓN ACTUAL */}
         <div style={{ background: "#1a1a1a", padding: "25px", borderRadius: "15px", borderLeft: "5px solid #9b59b6", boxShadow: "0 4px 20px rgba(155, 89, 182, 0.2)" }}>
             <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: "10px" }}>
-                <h3 style={{ margin: 0, color: "#aaa", fontSize: "0.9rem" }}>INVERSIÓN TOTAL</h3>
-                <FiShoppingCart color="#9b59b6" size={24} />
+                <h3 style={{ margin: 0, color: "#aaa", fontSize: "0.9rem" }}>INVERSIÓN ACTUAL</h3>
+                <FiPackage color="#9b59b6" size={24} />
             </div>
-            <p style={{ fontSize: "1.8rem", fontWeight: "bold", color: "#fff", margin: 0 }}>${data.total_investment.toLocaleString()}</p>
-            <p style={{ fontSize: "0.75rem", color: "#9b59b6", marginTop: "5px", fontWeight: "bold" }}>📊 Histórico completo</p>
+            <p style={{ fontSize: "1.8rem", fontWeight: "bold", color: "#fff", margin: 0 }}>${data.current_investment.toLocaleString()}</p>
+            <p style={{ fontSize: "0.75rem", color: "#9b59b6", marginTop: "5px", fontWeight: "bold" }}>📦 Valor del inventario</p>
+        </div>
+
+        {/* 🔥 COMPRAS TOTALES */}
+        <div style={{ background: "#1a1a1a", padding: "25px", borderRadius: "15px", borderLeft: "5px solid #3498db", boxShadow: "0 4px 20px rgba(52, 152, 219, 0.2)" }}>
+            <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: "10px" }}>
+                <h3 style={{ margin: 0, color: "#aaa", fontSize: "0.9rem" }}>COMPRAS TOTALES</h3>
+                <FiShoppingCart color="#3498db" size={24} />
+            </div>
+            <p style={{ fontSize: "1.8rem", fontWeight: "bold", color: "#fff", margin: 0 }}>${data.total_purchases.toLocaleString()}</p>
+            <p style={{ fontSize: "0.75rem", color: "#3498db", marginTop: "5px", fontWeight: "bold" }}>📊 Histórico completo</p>
         </div>
 
       </div>
 
       {/* GANANCIA NETA */}
-      <div style={{ background: "linear-gradient(135deg, #000 0%, #1a1a1a 100%)", padding: "40px", borderRadius: "20px", border: "1px solid #D4AF37", textAlign: "center", boxShadow: "0 10px 40px rgba(212, 175, 55, 0.15)" }}>
+      <div style={{ background: "linear-gradient(135deg, #000 0%, #1a1a1a 100%)", padding: "40px", borderRadius: "20px", border: "1px solid #D4AF37", textAlign: "center", boxShadow: "0 10px 40px rgba(212, 175, 55, 0.15)", marginBottom: "30px" }}>
         <h2 style={{ color: "#D4AF37", margin: "0 0 10px 0", letterSpacing: "3px", fontSize: "1rem" }}>UTILIDAD NETA REAL</h2>
         <div style={{ fontSize: "4.5rem", fontWeight: "bold", color: "#fff", textShadow: "0 0 20px rgba(255,255,255,0.1)" }}>
             ${data.net_profit.toLocaleString()}
@@ -154,6 +165,120 @@ export default function AdminFinancials() {
         </div>
       </div>
 
+      {/* 🔥 SECCIÓN DE ANÁLISIS DE INVERSIÓN */}
+      <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "30px", marginBottom: "30px" }}>
+        
+        {/* TOP 5 PRODUCTOS */}
+        <div style={{ background: "#111", padding: "30px", borderRadius: "15px", border: "1px solid #222" }}>
+          <h3 style={{ color: "#D4AF37", margin: "0 0 20px 0", display: "flex", alignItems: "center", gap: "10px" }}>
+            <FiDollarSign /> TOP 5 INVERSIÓN POR PRODUCTO
+          </h3>
+          <div style={{ overflowX: "auto" }}>
+            <table style={{ width: "100%", borderCollapse: "collapse", color: "#eee" }}>
+              <thead>
+                <tr style={{ borderBottom: "2px solid #333", color: "#888", fontSize: "0.85rem" }}>
+                  <th style={{ padding: "10px", textAlign: "left" }}>PRODUCTO</th>
+                  <th style={{ padding: "10px", textAlign: "center" }}>STOCK</th>
+                  <th style={{ padding: "10px", textAlign: "right" }}>COSTO</th>
+                  <th style={{ padding: "10px", textAlign: "right" }}>INVERSIÓN</th>
+                </tr>
+              </thead>
+              <tbody>
+                {data.top_products.map((product, idx) => (
+                  <tr key={idx} style={{ borderBottom: "1px solid #222" }}>
+                    <td style={{ padding: "15px", fontWeight: "bold" }}>{product.name}</td>
+                    <td style={{ padding: "15px", textAlign: "center", color: "#888" }}>{product.stock}u</td>
+                    <td style={{ padding: "15px", textAlign: "right", color: "#D4AF37" }}>${product.cost.toLocaleString()}</td>
+                    <td style={{ padding: "15px", textAlign: "right", color: "#2ecc71", fontWeight: "bold" }}>${product.value.toLocaleString()}</td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        </div>
+
+        {/* GRÁFICO DE DONA POR CATEGORÍA */}
+        <div style={{ background: "#111", padding: "30px", borderRadius: "15px", border: "1px solid #222" }}>
+          <h3 style={{ color: "#D4AF37", margin: "0 0 20px 0", display: "flex", alignItems: "center", gap: "10px" }}>
+            <FiPieChart /> INVERSIÓN POR CATEGORÍA
+          </h3>
+          <DonutChart data={data.investment_by_category} />
+        </div>
+
+      </div>
+
+    </div>
+  );
+}
+
+// 🔥 COMPONENTE DE GRÁFICO DE DONA
+function DonutChart({ data }) {
+  const total = data.reduce((sum, item) => sum + item.value, 0);
+  
+  const colors = ["#2ecc71", "#3498db", "#9b59b6", "#e74c3c", "#f39c12", "#1abc9c", "#34495e"];
+  
+  let currentAngle = -90;
+  
+  return (
+    <div style={{ display: "flex", flexDirection: "column", gap: "20px" }}>
+      {/* SVG DONA */}
+      <svg viewBox="0 0 200 200" style={{ maxWidth: "250px", margin: "0 auto" }}>
+        {data.map((item, idx) => {
+          const percentage = (item.value / total) * 100;
+          const angle = (percentage / 100) * 360;
+          const endAngle = currentAngle + angle;
+          
+          const startRad = (currentAngle * Math.PI) / 180;
+          const endRad = (endAngle * Math.PI) / 180;
+          
+          const x1 = 100 + 80 * Math.cos(startRad);
+          const y1 = 100 + 80 * Math.sin(startRad);
+          const x2 = 100 + 80 * Math.cos(endRad);
+          const y2 = 100 + 80 * Math.sin(endRad);
+          
+          const largeArc = angle > 180 ? 1 : 0;
+          
+          const pathData = [
+            `M 100 100`,
+            `L ${x1} ${y1}`,
+            `A 80 80 0 ${largeArc} 1 ${x2} ${y2}`,
+            `Z`
+          ].join(' ');
+          
+          currentAngle = endAngle;
+          
+          return (
+            <path
+              key={idx}
+              d={pathData}
+              fill={colors[idx % colors.length]}
+              opacity="0.9"
+            />
+          );
+        })}
+        
+        {/* CÍRCULO INTERIOR (DONA) */}
+        <circle cx="100" cy="100" r="50" fill="#111" />
+        
+        {/* TEXTO CENTRAL */}
+        <text x="100" y="95" textAnchor="middle" fill="#D4AF37" fontSize="12" fontWeight="bold">TOTAL</text>
+        <text x="100" y="110" textAnchor="middle" fill="#fff" fontSize="14" fontWeight="bold">
+          ${(total / 1000).toFixed(0)}k
+        </text>
+      </svg>
+
+      {/* LEYENDA */}
+      <div style={{ display: "flex", flexDirection: "column", gap: "8px" }}>
+        {data.map((item, idx) => (
+          <div key={idx} style={{ display: "flex", justifyContent: "space-between", alignItems: "center", fontSize: "0.85rem" }}>
+            <div style={{ display: "flex", alignItems: "center", gap: "8px" }}>
+              <div style={{ width: "12px", height: "12px", borderRadius: "2px", background: colors[idx % colors.length] }}></div>
+              <span style={{ color: "#eee" }}>{item.category}</span>
+            </div>
+            <span style={{ color: "#D4AF37", fontWeight: "bold" }}>${item.value.toLocaleString()}</span>
+          </div>
+        ))}
+      </div>
     </div>
   );
 }
