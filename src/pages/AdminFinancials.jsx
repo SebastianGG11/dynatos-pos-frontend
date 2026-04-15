@@ -1,6 +1,6 @@
 import { useState, useEffect } from "react";
 import api from "../api/api";
-import { FiTrendingUp, FiTrendingDown, FiCalendar, FiDownload, FiPieChart, FiMinusCircle } from "react-icons/fi";
+import { FiTrendingUp, FiTrendingDown, FiCalendar, FiDownload, FiPieChart, FiMinusCircle, FiShoppingCart } from "react-icons/fi";
 import ExcelJS from "exceljs";
 import { saveAs } from "file-saver";
 
@@ -48,9 +48,11 @@ export default function AdminFinancials() {
       ['(=) VENTAS NETAS', '', '', Number(data.net_sales)],
       [],
       ['(-) COSTO DE MERCANCÍA (COGS)', '', '', Number(data.net_cost) * -1],
-      ['(-) GASTOS OPERATIVOS', '', '', Number(data.expenses) * -1], // 🔥 NUEVA FILA
+      ['(-) GASTOS OPERATIVOS', '', '', Number(data.expenses) * -1],
       [],
       ['(=) UTILIDAD NETA REAL', '', '', Number(data.net_profit)],
+      [],
+      ['📊 INVERSIÓN TOTAL HISTÓRICA', '', '', Number(data.total_investment)],
     ];
 
     rows.forEach(r => {
@@ -58,7 +60,7 @@ export default function AdminFinancials() {
       row.getCell(4).numFmt = '"$"#,##0.00';
     });
 
-    const lastRow = sheet.lastRow;
+    const lastRow = sheet.getRow(sheet.lastRow.number - 2);
     lastRow.font = { bold: true, size: 14, color: { argb: 'FF000000' } };
     lastRow.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: 'FFD4AF37' } };
 
@@ -72,7 +74,7 @@ export default function AdminFinancials() {
   if (!data) return <div className="p-10 text-center text-white">Cargando contabilidad...</div>;
 
   return (
-    <div style={{ maxWidth: "1000px", margin: "0 auto", padding: "20px", animation: "fadeIn 0.5s" }}>
+    <div style={{ maxWidth: "1200px", margin: "0 auto", padding: "20px", animation: "fadeIn 0.5s" }}>
       
       {/* HEADER */}
       <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: "30px", borderBottom: "1px solid #333", paddingBottom: "20px" }}>
@@ -97,39 +99,51 @@ export default function AdminFinancials() {
       </div>
 
       {/* TARJETAS PRINCIPALES */}
-      <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(300px, 1fr))", gap: "20px", marginBottom: "30px" }}>
+      <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(280px, 1fr))", gap: "20px", marginBottom: "30px" }}>
         
-        {/* INGRESOS */}
+        {/* VENTAS NETAS */}
         <div style={{ background: "#1a1a1a", padding: "25px", borderRadius: "15px", borderLeft: "5px solid #2ecc71" }}>
             <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: "10px" }}>
                 <h3 style={{ margin: 0, color: "#aaa", fontSize: "0.9rem" }}>VENTAS NETAS</h3>
                 <FiTrendingUp color="#2ecc71" size={24} />
             </div>
             <p style={{ fontSize: "1.8rem", fontWeight: "bold", color: "#fff", margin: 0 }}>${data.net_sales.toLocaleString()}</p>
+            <p style={{ fontSize: "0.75rem", color: "#666", marginTop: "5px" }}>Periodo seleccionado</p>
         </div>
 
-        {/* COSTOS */}
+        {/* COSTO MERCANCÍA */}
         <div style={{ background: "#1a1a1a", padding: "25px", borderRadius: "15px", borderLeft: "5px solid #e74c3c" }}>
             <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: "10px" }}>
                 <h3 style={{ margin: 0, color: "#aaa", fontSize: "0.9rem" }}>COSTO MERCANCÍA</h3>
                 <FiTrendingDown color="#e74c3c" size={24} />
             </div>
             <p style={{ fontSize: "1.8rem", fontWeight: "bold", color: "#fff", margin: 0 }}>-${data.net_cost.toLocaleString()}</p>
+            <p style={{ fontSize: "0.75rem", color: "#666", marginTop: "5px" }}>Periodo seleccionado</p>
         </div>
 
-        {/* GASTOS OPERATIVOS (NUEVO) */}
+        {/* GASTOS OPERATIVOS */}
         <div style={{ background: "#1a1a1a", padding: "25px", borderRadius: "15px", borderLeft: "5px solid #ff6b6b" }}>
             <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: "10px" }}>
                 <h3 style={{ margin: 0, color: "#aaa", fontSize: "0.9rem" }}>GASTOS OPERATIVOS</h3>
                 <FiMinusCircle color="#ff6b6b" size={24} />
             </div>
             <p style={{ fontSize: "1.8rem", fontWeight: "bold", color: "#fff", margin: 0 }}>-${data.expenses.toLocaleString()}</p>
-            <p style={{ fontSize: "0.8rem", color: "#666", marginTop: "5px" }}>Luz, Nómina, etc.</p>
+            <p style={{ fontSize: "0.75rem", color: "#666", marginTop: "5px" }}>Luz, Nómina, etc.</p>
+        </div>
+
+        {/* 🔥 INVERSIÓN TOTAL (NUEVA TARJETA) */}
+        <div style={{ background: "#1a1a1a", padding: "25px", borderRadius: "15px", borderLeft: "5px solid #9b59b6", boxShadow: "0 4px 20px rgba(155, 89, 182, 0.2)" }}>
+            <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: "10px" }}>
+                <h3 style={{ margin: 0, color: "#aaa", fontSize: "0.9rem" }}>INVERSIÓN TOTAL</h3>
+                <FiShoppingCart color="#9b59b6" size={24} />
+            </div>
+            <p style={{ fontSize: "1.8rem", fontWeight: "bold", color: "#fff", margin: 0 }}>${data.total_investment.toLocaleString()}</p>
+            <p style={{ fontSize: "0.75rem", color: "#9b59b6", marginTop: "5px", fontWeight: "bold" }}>📊 Histórico completo</p>
         </div>
 
       </div>
 
-      {/* GANANCIA */}
+      {/* GANANCIA NETA */}
       <div style={{ background: "linear-gradient(135deg, #000 0%, #1a1a1a 100%)", padding: "40px", borderRadius: "20px", border: "1px solid #D4AF37", textAlign: "center", boxShadow: "0 10px 40px rgba(212, 175, 55, 0.15)" }}>
         <h2 style={{ color: "#D4AF37", margin: "0 0 10px 0", letterSpacing: "3px", fontSize: "1rem" }}>UTILIDAD NETA REAL</h2>
         <div style={{ fontSize: "4.5rem", fontWeight: "bold", color: "#fff", textShadow: "0 0 20px rgba(255,255,255,0.1)" }}>
