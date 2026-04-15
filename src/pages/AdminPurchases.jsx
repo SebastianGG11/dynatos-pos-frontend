@@ -1,14 +1,18 @@
 import { useState, useEffect } from "react";
 import api from "../api/api";
-import { FiPlus, FiTrash2, FiAlertCircle, FiX, FiPackage, FiSearch } from "react-icons/fi";
+import { FiPlus, FiTrash2, FiAlertCircle, FiX, FiPackage, FiEdit } from "react-icons/fi";
 
 export default function AdminPurchases() {
   const [purchases, setPurchases] = useState([]);
-  const [allProducts, setAllProducts] = useState([]); // 🔥 Productos de la DB
+  const [allProducts, setAllProducts] = useState([]);
   const [loading, setLoading] = useState(true);
   const [showForm, setShowForm] = useState(false);
   const [saving, setSaving] = useState(false);
   const [uiError, setUiError] = useState("");
+  
+  // 🔥 NUEVO: Estado para edición
+  const [editingPurchase, setEditingPurchase] = useState(null);
+  const [originalItems, setOriginalItems] = useState([]);
 
   const [form, setForm] = useState({
     supplier_name: "",
@@ -45,6 +49,72 @@ export default function AdminPurchases() {
     setForm(prev => ({ ...prev, [name]: value }));
   };
 
+  // 🔥 NUEVO: Abrir formulario para editar
+  const openEditForm = async (purchase) => {
+    setEditingPurchase(purchase);
+    
+    // Cargar datos básicos
+    setForm({
+      supplier_name: purchase.supplier_name,
+      invoice_number: purchase.invoice_number || "",
+      notes: purchase.notes || ""
+    });
+
+    // Intentar parsear productos desde notes
+    const notesLines = (purchase.notes || "").split("\n");
+    const productLines = [];
+    let inProductsSection = false;
+
+    for (const line of notesLines) {
+      if (line.includes("PRODUCTOS:")) {
+        inProductsSection = true;
+        continue;
+      }
+      
+      if (inProductsSection && line.trim()) {
+        // Formato esperado: "6x CORONA EXTRA @ $4.000"
+        const match = line.match(/(\d+)x\s+(.+?)\s+@\s+\$?([\d,\.]+)/);
+        if (match) {
+          const quantity = match[1];
+          const name = match[2].trim();
+          const price = match[3].replace(/[,\.]/g, "");
+          
+          // Buscar si el producto existe
+          const existingProduct = allProducts.find(p => 
+            p.name.toLowerCase() === name.toLowerCase()
+          );
+
+          productLines.push({
+            id: Date.now() + Math.random(),
+            product_id: existingProduct?.id || null,
+            product_name: name,
+            quantity: quantity,
+            unit_cost: price,
+            isNew: !existingProduct
+          });
+        }
+      }
+    }
+
+    // Si no se encontraron productos en notes, usar uno vacío
+    const parsedProducts = productLines.length > 0 
+      ? productLines 
+      : [{ id: Date.now(), product_id: null, product_name: "", quantity: "", unit_cost: "", isNew: false }];
+
+    setProducts(parsedProducts);
+    setOriginalItems(JSON.parse(JSON.stringify(parsedProducts))); // Copia profunda
+    setShowForm(true);
+  };
+
+  // 🔥 NUEVO: Cerrar formulario y limpiar estado
+  const closeForm = () => {
+    setShowForm(false);
+    setEditingPurchase(null);
+    setOriginalItems([]);
+    setForm({ supplier_name: "", invoice_number: "", notes: "" });
+    setProducts([{ id: Date.now(), product_id: null, product_name: "", quantity: "", unit_cost: "", isNew: false }]);
+  };
+
   const addProductLine = () => {
     setProducts([...products, { 
       id: Date.now(), 
@@ -60,7 +130,6 @@ export default function AdminPurchases() {
     setProducts(products.map(p => {
       if (p.id !== id) return p;
       
-      // Si cambia el nombre del producto, buscar si existe
       if (field === "product_name") {
         const existingProduct = allProducts.find(prod => 
           prod.name.toLowerCase() === value.toLowerCase()
@@ -128,7 +197,6 @@ export default function AdminPurchases() {
     try {
       const total = calculateTotal();
       
-      // Preparar items para el backend
       const items = validProducts.map(p => ({
         product_id: p.product_id,
         product_name: p.product_name,
@@ -137,29 +205,47 @@ export default function AdminPurchases() {
         is_new: p.isNew
       }));
 
-      // Enviar compra con items
-      await api.post("/purchases", {
+      const productDetails = validProducts.map(p => 
+        `${p.quantity}x ${p.product_name} @ $${Number(p.unit_cost).toLocaleString()}`
+      ).join("\n");
+
+      const payload = {
         supplier_name: form.supplier_name,
         invoice_number: form.invoice_number,
         total_amount: total,
-        notes: form.notes,
-        items: items // 🔥 Enviamos los productos
-      });
+        notes: `${form.notes ? form.notes + "\n\n" : ""}PRODUCTOS:\n${productDetails}`,
+        items: items
+      };
 
-      await loadData(); // Recargar productos y compras
-      setShowForm(false);
-      setForm({ supplier_name: "", invoice_number: "", notes: "" });
-      setProducts([{ id: Date.now(), product_id: null, product_name: "", quantity: "", unit_cost: "", isNew: false }]);
-      alert("¡Compra registrada con éxito! Stock actualizado.");
+      if (editingPurchase) {
+        // 🔥 MODO EDICIÓN: Enviar items viejos para revertir stock
+        payload.old_items = originalItems.map(p => ({
+          product_id: p.product_id,
+          product_name: p.product_name,
+          quantity: Number(p.quantity),
+          unit_cost: Number(p.unit_cost),
+          is_new: p.isNew
+        }));
+
+        await api.put(`/purchases/${editingPurchase.id}`, payload);
+        alert("¡Compra actualizada con éxito! Stock recalculado.");
+      } else {
+        // 🔥 MODO CREACIÓN
+        await api.post("/purchases", payload);
+        alert("¡Compra registrada con éxito! Stock actualizado.");
+      }
+
+      await loadData();
+      closeForm();
     } catch (err) {
-      setUiError("Error al guardar la compra: " + (err.response?.data?.error || err.message));
+      setUiError("Error al guardar la compra: " + (err.response?.data?.message || err.message));
     } finally {
       setSaving(false);
     }
   };
 
   const deletePurchase = async (id) => {
-    if (!window.confirm("¿Seguro que quieres eliminar este registro de compra?")) return;
+    if (!window.confirm("⚠️ ¿Seguro que quieres eliminar este registro?\n\nNOTA: Esto NO revertirá el stock agregado.")) return;
     try {
       await api.delete(`/purchases/${id}`);
       await loadData();
@@ -201,7 +287,9 @@ export default function AdminPurchases() {
       {showForm && (
         <div style={{ position: "fixed", inset: 0, backgroundColor: "rgba(0,0,0,0.95)", zIndex: 2000, display: "flex", alignItems: "center", justifyContent: "center", padding: "20px", overflowY: "auto" }}>
           <div style={{ backgroundColor: "#111", border: "1px solid #D4AF37", padding: "40px", borderRadius: "20px", width: "100%", maxWidth: "1000px", maxHeight: "90vh", overflowY: "auto" }}>
-            <h3 style={{ color: "#D4AF37", marginTop: 0, marginBottom: "30px", fontSize: "1.5rem" }}>REGISTRAR COMPRA</h3>
+            <h3 style={{ color: "#D4AF37", marginTop: 0, marginBottom: "30px", fontSize: "1.5rem" }}>
+              {editingPurchase ? "EDITAR COMPRA" : "REGISTRAR COMPRA"}
+            </h3>
             
             <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "20px", marginBottom: "30px" }}>
               <div style={{ gridColumn: "span 2" }}>
@@ -256,9 +344,9 @@ export default function AdminPurchases() {
             </div>
 
             <div style={{ display: "flex", gap: "15px" }}>
-              <button onClick={() => setShowForm(false)} style={{ flex: 1, padding: "12px", borderRadius: "8px", border: "1px solid #333", backgroundColor: "transparent", color: "#888", cursor: "pointer" }}>CANCELAR</button>
+              <button onClick={closeForm} style={{ flex: 1, padding: "12px", borderRadius: "8px", border: "1px solid #333", backgroundColor: "transparent", color: "#888", cursor: "pointer" }}>CANCELAR</button>
               <button onClick={savePurchase} disabled={saving} style={{ flex: 1, padding: "12px", borderRadius: "8px", border: "none", backgroundColor: "#D4AF37", color: "#000", fontWeight: "bold", cursor: "pointer" }}>
-                {saving ? "PROCESANDO..." : "REGISTRAR COMPRA"}
+                {saving ? "PROCESANDO..." : (editingPurchase ? "ACTUALIZAR COMPRA" : "REGISTRAR COMPRA")}
               </button>
             </div>
           </div>
@@ -284,14 +372,27 @@ export default function AdminPurchases() {
                 <tr key={p.id} style={{ borderBottom: "1px solid #222" }}>
                   <td style={{ padding: "20px" }}>{new Date(p.created_at).toLocaleDateString()}</td>
                   <td style={{ padding: "20px", fontWeight: "bold" }}>{p.supplier_name}</td>
-                  <td style={{ padding: "20px", color: "#888", fontSize: "0.85rem", whiteSpace: "pre-line" }}>
+                  <td style={{ padding: "20px", color: "#888", fontSize: "0.85rem", whiteSpace: "pre-line", maxWidth: "300px" }}>
                     {p.notes || "Sin descripción"}
                   </td>
                   <td style={{ padding: "20px", textAlign: "right", color: "#D4AF37", fontWeight: "bold" }}>{money(p.total_amount)}</td>
                   <td style={{ padding: "20px", textAlign: "center" }}>
-                    <button onClick={() => deletePurchase(p.id)} style={{ background: "none", border: "none", color: "#f55", cursor: "pointer" }}>
-                      <FiTrash2 size={18} />
-                    </button>
+                    <div style={{ display: "flex", gap: "10px", justifyContent: "center" }}>
+                      <button 
+                        onClick={() => openEditForm(p)} 
+                        style={{ background: "none", border: "none", color: "#2ecc71", cursor: "pointer" }}
+                        title="Editar compra"
+                      >
+                        <FiEdit size={18} />
+                      </button>
+                      <button 
+                        onClick={() => deletePurchase(p.id)} 
+                        style={{ background: "none", border: "none", color: "#f55", cursor: "pointer" }}
+                        title="Eliminar compra"
+                      >
+                        <FiTrash2 size={18} />
+                      </button>
+                    </div>
                   </td>
                 </tr>
               ))
@@ -330,7 +431,6 @@ function ProductLine({ product, allProducts, onUpdate, onSelect, onRemove, canRe
     <div style={{ marginBottom: "15px", padding: "15px", background: "#111", borderRadius: "8px", border: "1px solid #222" }}>
       <div style={{ display: "grid", gridTemplateColumns: "2fr 1fr 1fr 1fr auto", gap: "10px", alignItems: "center", marginBottom: "10px" }}>
         
-        {/* NOMBRE DEL PRODUCTO CON AUTOCOMPLETE */}
         <div style={{ position: "relative" }}>
           <input
             type="text"
