@@ -1,7 +1,7 @@
 import { useEffect, useState, useRef } from "react";
 import { useNavigate } from "react-router-dom";
 import api from "../api/api"; 
-import { FiPlus, FiEdit, FiTrash2, FiSearch, FiX, FiTrendingUp, FiPackage, FiGrid, FiAlertCircle } from "react-icons/fi";
+import { FiPlus, FiEdit, FiTrash2, FiSearch, FiX, FiTrendingUp, FiPackage, FiGrid, FiAlertCircle, FiEye, FiEyeOff, FiRefreshCw } from "react-icons/fi";
 import { FaBarcode } from "react-icons/fa"; 
 
 export default function AdminProducts() {
@@ -16,7 +16,10 @@ export default function AdminProducts() {
   const [showModal, setShowModal] = useState(false);
   const [isEditing, setIsEditing] = useState(false);
 
-  // 🆕 Estado para modal de confirmación de eliminación
+  // 🆕 Estado para mostrar inactivos
+  const [showInactive, setShowInactive] = useState(false);
+
+  // Estado para modal de confirmación de eliminación
   const [showDeleteModal, setShowDeleteModal] = useState(false);
   const [productToDelete, setProductToDelete] = useState(null);
   const [deleteError, setDeleteError] = useState(null);
@@ -37,7 +40,7 @@ export default function AdminProducts() {
   useEffect(() => {
     loadProducts();
     loadCategories();
-  }, []);
+  }, [showInactive]); // 🔥 Recargar cuando cambie showInactive
 
   useEffect(() => {
     if (showModal && barcodeInputRef.current) {
@@ -45,10 +48,12 @@ export default function AdminProducts() {
     }
   }, [showModal]);
 
+  // 🔥 FUNCIÓN ACTUALIZADA: Cargar productos con filtro de inactivos
   const loadProducts = async () => {
     setLoading(true);
     try {
-      const res = await api.get("/products");
+      const url = showInactive ? "/products?include_inactive=true" : "/products";
+      const res = await api.get(url);
       const productsList = res.data.items || [];
       setAllProducts(productsList);
       setProducts(productsList);
@@ -82,7 +87,10 @@ export default function AdminProducts() {
     
     if (val.length > 2) {
       try {
-        const res = await api.get(`/products/search?q=${val}`);
+        const url = showInactive 
+          ? `/products/search?q=${val}&include_inactive=true` 
+          : `/products/search?q=${val}`;
+        const res = await api.get(url);
         let filtered = res.data.items || [];
         
         if (selectedCategory) {
@@ -186,14 +194,26 @@ export default function AdminProducts() {
     }
   };
 
-  // 🔧 NUEVA FUNCIÓN: Abrir modal de eliminación
+  // NUEVA FUNCIÓN: Reactivar producto
+  const handleReactivate = async (productId) => {
+    if (!window.confirm("¿Deseas reactivar este producto para que vuelva a aparecer en el POS?")) return;
+
+    try {
+      await api.put(`/products/${productId}`, { is_active: 1 });
+      alert("✅ Producto reactivado correctamente");
+      loadProducts();
+    } catch (error) {
+      console.error("Error al reactivar:", error);
+      alert("Error al reactivar el producto");
+    }
+  };
+
   const handleDeleteClick = (product) => {
     setProductToDelete(product);
     setDeleteError(null);
     setShowDeleteModal(true);
   };
 
-  // 🔧 NUEVA FUNCIÓN: Intentar eliminación definitiva
   const handleDeleteHard = async () => {
     if (!productToDelete) return;
 
@@ -206,11 +226,9 @@ export default function AdminProducts() {
     } catch (error) {
       console.error("Error al eliminar:", error);
       
-      // Capturar el mensaje de error del backend
       const errorData = error.response?.data;
       
       if (error.response?.status === 400) {
-        // El producto tiene ventas - mostrar opción de soft delete
         setDeleteError({
           message: errorData?.message || "No se puede eliminar este producto",
           recommendation: errorData?.recommendation,
@@ -223,7 +241,6 @@ export default function AdminProducts() {
     }
   };
 
-  // 🔧 NUEVA FUNCIÓN: Marcar como inactivo (soft delete)
   const handleDeleteSoft = async () => {
     if (!productToDelete) return;
 
@@ -248,9 +265,32 @@ export default function AdminProducts() {
           <h1 style={{ color: "#D4AF37", margin: 0, fontSize: "2.2rem", fontWeight: "800" }}>PRODUCTOS</h1>
           <p style={{ color: "#555", marginTop: "5px" }}>Control total de existencias y márgenes comerciales</p>
         </div>
-        <button onClick={handleOpenCreate} style={{ display: "flex", alignItems: "center", gap: "10px", padding: "14px 30px", background: "#D4AF37", border: "none", borderRadius: "12px", fontWeight: "bold", cursor: "pointer", color: "#000", boxShadow: "0 4px 15px rgba(212, 175, 55, 0.2)" }}>
-          <FiPlus size={20} /> NUEVO PRODUCTO
-        </button>
+        <div style={{ display: "flex", gap: "12px" }}>
+          {/* 🆕 BOTÓN TOGGLE INACTIVOS */}
+          <button 
+            onClick={() => setShowInactive(!showInactive)}
+            style={{ 
+              display: "flex", 
+              alignItems: "center", 
+              gap: "10px", 
+              padding: "14px 24px", 
+              background: showInactive ? "#444" : "#222", 
+              border: showInactive ? "2px solid #888" : "1px solid #333",
+              borderRadius: "12px", 
+              fontWeight: "bold", 
+              cursor: "pointer", 
+              color: showInactive ? "#fff" : "#888",
+              transition: "all 0.2s"
+            }}
+          >
+            {showInactive ? <FiEye size={20} /> : <FiEyeOff size={20} />}
+            {showInactive ? "OCULTAR INACTIVOS" : "VER INACTIVOS"}
+          </button>
+
+          <button onClick={handleOpenCreate} style={{ display: "flex", alignItems: "center", gap: "10px", padding: "14px 30px", background: "#D4AF37", border: "none", borderRadius: "12px", fontWeight: "bold", cursor: "pointer", color: "#000", boxShadow: "0 4px 15px rgba(212, 175, 55, 0.2)" }}>
+            <FiPlus size={20} /> NUEVO PRODUCTO
+          </button>
+        </div>
       </div>
 
       {/* BÚSQUEDA */}
@@ -352,20 +392,23 @@ export default function AdminProducts() {
               <th style={{ padding: "22px", color: "#D4AF37", borderBottom: "1px solid #1a1a1a" }}>P. VENTA</th>
               <th style={{ padding: "22px", color: "#D4AF37", borderBottom: "1px solid #1a1a1a" }}>GANANCIA</th>
               <th style={{ padding: "22px", color: "#D4AF37", borderBottom: "1px solid #1a1a1a" }}>STOCK</th>
+              <th style={{ padding: "22px", color: "#D4AF37", borderBottom: "1px solid #1a1a1a" }}>ESTADO</th>
               <th style={{ padding: "22px", color: "#D4AF37", borderBottom: "1px solid #1a1a1a", textAlign: "center" }}>ACCIONES</th>
             </tr>
           </thead>
           <tbody>
             {loading ? (
-              <tr><td colSpan="7" style={{ textAlign: "center", padding: "50px", color: "#444" }}>Actualizando inventario...</td></tr>
+              <tr><td colSpan="8" style={{ textAlign: "center", padding: "50px", color: "#444" }}>Actualizando inventario...</td></tr>
             ) : products.length === 0 ? (
-              <tr><td colSpan="7" style={{ textAlign: "center", padding: "50px", color: "#444" }}>
+              <tr><td colSpan="8" style={{ textAlign: "center", padding: "50px", color: "#444" }}>
                 {selectedCategory ? "No hay productos en esta categoría" : "No hay productos registrados"}
               </td></tr>
             ) : products.map(p => {
               const profit = Number(p.sale_price) - Number(p.cost_price);
+              const isInactive = p.is_active === 0;
+              
               return (
-                <tr key={p.id} style={{ borderBottom: "1px solid #0f0f0f" }}>
+                <tr key={p.id} style={{ borderBottom: "1px solid #0f0f0f", opacity: isInactive ? 0.5 : 1 }}>
                   <td style={{ padding: "20px", color: "#666", fontFamily: "monospace" }}>{p.barcode || "S/N"}</td>
                   <td style={{ padding: "20px", fontWeight: "700", color: "#eee" }}>{p.name}</td>
                   <td style={{ padding: "20px", color: "#888" }}>{categories.find(c => c.id === p.category_id)?.name || "General"}</td>
@@ -381,23 +424,45 @@ export default function AdminProducts() {
                       {p.current_stock}
                     </span>
                   </td>
+                  <td style={{ padding: "20px" }}>
+                    {isInactive ? (
+                      <span style={{ padding: "6px 14px", background: "rgba(136, 136, 136, 0.1)", color: "#888", borderRadius: "8px", fontSize: "0.8rem", border: "1px solid #444", fontWeight: "bold" }}>
+                        INACTIVO
+                      </span>
+                    ) : (
+                      <span style={{ padding: "6px 14px", background: "rgba(46, 204, 113, 0.1)", color: "#2ecc71", borderRadius: "8px", fontSize: "0.8rem", border: "1px solid #2ecc71", fontWeight: "bold" }}>
+                        ACTIVO
+                      </span>
+                    )}
+                  </td>
                   <td style={{ padding: "20px", textAlign: "center" }}>
-                    <button 
-                      onClick={() => navigate(`/admin/productos/${p.id}/presentations`)} 
-                      style={{ background: "none", border: "none", cursor: "pointer", marginRight: "15px" }}
-                      title="Gestionar presentaciones"
-                    >
-                      <FiPackage color="#2ecc71" size={20} />
-                    </button>
-                    
-                    <button onClick={() => handleOpenEdit(p)} style={{ background: "none", border: "none", cursor: "pointer", marginRight: "15px" }}>
-                      <FiEdit color="#D4AF37" size={20} />
-                    </button>
-                    
-                    {/* 🔧 BOTÓN ACTUALIZADO */}
-                    <button onClick={() => handleDeleteClick(p)} style={{ background: "none", border: "none", cursor: "pointer" }}>
-                      <FiTrash2 color="#ff4444" size={20} />
-                    </button>
+                    {isInactive ? (
+                      <button 
+                        onClick={() => handleReactivate(p.id)}
+                        style={{ background: "#2ecc71", border: "none", padding: "8px 16px", borderRadius: "6px", color: "#000", fontWeight: "bold", cursor: "pointer", display: "flex", alignItems: "center", gap: "6px", margin: "0 auto" }}
+                        title="Reactivar producto"
+                      >
+                        <FiRefreshCw size={16} /> REACTIVAR
+                      </button>
+                    ) : (
+                      <>
+                        <button 
+                          onClick={() => navigate(`/admin/productos/${p.id}/presentations`)} 
+                          style={{ background: "none", border: "none", cursor: "pointer", marginRight: "15px" }}
+                          title="Gestionar presentaciones"
+                        >
+                          <FiPackage color="#2ecc71" size={20} />
+                        </button>
+                        
+                        <button onClick={() => handleOpenEdit(p)} style={{ background: "none", border: "none", cursor: "pointer", marginRight: "15px" }}>
+                          <FiEdit color="#D4AF37" size={20} />
+                        </button>
+                        
+                        <button onClick={() => handleDeleteClick(p)} style={{ background: "none", border: "none", cursor: "pointer" }}>
+                          <FiTrash2 color="#ff4444" size={20} />
+                        </button>
+                      </>
+                    )}
                   </td>
                 </tr>
               );
@@ -536,7 +601,7 @@ export default function AdminProducts() {
         </div>
       )}
 
-      {/* 🆕 MODAL DE ELIMINACIÓN */}
+      {/* MODAL DE ELIMINACIÓN */}
       {showDeleteModal && productToDelete && (
         <div style={{ position: "fixed", top: 0, left: 0, width: "100%", height: "100%", background: "rgba(0,0,0,0.9)", display: "flex", justifyContent: "center", alignItems: "center", zIndex: 2000, backdropFilter: "blur(10px)" }}>
           <div style={{ background: "#0a0a0a", width: "500px", padding: "40px", borderRadius: "25px", border: "2px solid #ff4444" }}>
