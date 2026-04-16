@@ -132,13 +132,60 @@ export default function Venta({ cashDrawer, onCashClosed }) {
   // ✅ CARGAR CARRITOS AL INICIAR (UNA SOLA VEZ)
   useEffect(() => {
     const savedData = loadFromLocalStorage();
-    
+  
     if (savedData) {
-      setSales(savedData.sales);
+     setSales(savedData.sales);
       setActiveSaleId(savedData.activeSaleId || 1);
       setNextSaleId(savedData.nextSaleId || 2);
     }
-  }, [loadFromLocalStorage]);
+
+   // 🔥 AGREGAR FUNCIÓN GLOBAL PARA VER BACKUP DE FORMA AMIGABLE
+    window.verBackup = () => {
+     try {
+        const backup = localStorage.getItem("dynatos_sales_backup");
+        if (!backup) {
+         console.log("❌ No hay backup disponible");
+         return;
+       }
+
+        const data = JSON.parse(backup);
+      
+       console.log("\n🛡️ ===== BACKUP DE CARRITOS =====");
+       console.log(`📅 Última actualización: ${new Date(data.lastUpdate).toLocaleString()}`);
+       console.log(`🛒 Total de ventas: ${data.sales.length}\n`);
+
+       data.sales.forEach((sale, idx) => {
+         console.log(`\n📦 VENTA #${sale.id} ${sale.customName ? `- "${sale.customName}"` : ""}`);
+        
+         if (sale.cart.length === 0) {
+           console.log("   └─ Carrito vacío");
+         } else {
+            console.log(`   └─ Productos en carrito (${sale.cart.length}):`);
+            sale.cart.forEach((item, i) => {
+              const total = item.qty * parseFloat(item.sale_price);
+              console.log(`      ${i + 1}. ${item.name}`);
+              console.log(`         Cantidad: ${item.qty} x $${parseFloat(item.sale_price).toLocaleString()} = $${total.toLocaleString()}`);
+            });
+          
+            if (sale.preview) {
+              console.log(`\n   💰 TOTAL: $${sale.preview.total.toLocaleString()}`);
+            }
+          }
+       });
+
+        console.log("\n=====================================\n");
+       console.log("💡 Tip: Para ver el JSON completo escribe: JSON.parse(localStorage.getItem('dynatos_sales_backup'))");
+      
+     } catch (error) {
+       console.error("❌ Error leyendo backup:", error);
+     }
+    };
+
+  console.log("💡 Comando disponible: verBackup() - Muestra el backup de forma legible");
+
+}, [loadFromLocalStorage]);
+  
+  
 
   // ✅ GUARDAR AUTOMÁTICAMENTE CUANDO CAMBIAN LOS DATOS
   useEffect(() => {
