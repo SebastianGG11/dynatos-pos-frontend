@@ -64,7 +64,6 @@ export default function Venta({ cashDrawer, onCashClosed }) {
   // ✅ FUNCIÓN SEGURA PARA GUARDAR EN LOCALSTORAGE
   const saveToLocalStorage = useCallback((data) => {
     try {
-      // Validar que los datos sean válidos
       if (!data || !data.sales || !Array.isArray(data.sales)) {
         console.error("❌ Datos inválidos, no se guardará en localStorage");
         return false;
@@ -83,11 +82,9 @@ export default function Venta({ cashDrawer, onCashClosed }) {
   // ✅ FUNCIÓN SEGURA PARA CARGAR DESDE LOCALSTORAGE
   const loadFromLocalStorage = useCallback(() => {
     try {
-      // Intentar cargar datos principales
       let savedData = localStorage.getItem("dynatos_sales");
       let source = "principal";
 
-      // Si no hay datos, intentar backup
       if (!savedData) {
         console.warn("⚠️ No se encontraron datos principales, intentando backup...");
         savedData = localStorage.getItem("dynatos_sales_backup");
@@ -97,7 +94,6 @@ export default function Venta({ cashDrawer, onCashClosed }) {
       if (savedData) {
         const parsed = JSON.parse(savedData);
         
-        // Validar integridad
         if (!parsed.sales || !Array.isArray(parsed.sales)) {
           throw new Error("Estructura de datos inválida");
         }
@@ -110,14 +106,11 @@ export default function Venta({ cashDrawer, onCashClosed }) {
     } catch (error) {
       console.error("❌ Error cargando desde localStorage:", error);
       
-      // Intentar recuperar desde backup si falla el principal
       try {
         const backup = localStorage.getItem("dynatos_sales_backup");
         if (backup) {
           const parsed = JSON.parse(backup);
           console.log("✅ Recuperado desde backup después de error");
-          
-          // Restaurar datos principales
           localStorage.setItem("dynatos_sales", backup);
           return parsed;
         }
@@ -129,37 +122,81 @@ export default function Venta({ cashDrawer, onCashClosed }) {
     }
   }, []);
 
-  // ✅ CARGAR CARRITOS AL INICIAR (UNA SOLA VEZ)
+  // 🔥 NUEVA FUNCIÓN: Sincronizar precios del carrito con la base de datos
+  const syncCartPrices = useCallback((currentProducts) => {
+    setSales(prevSales => {
+      let hasChanges = false;
+      const updatedSales = prevSales.map(sale => {
+        const updatedCart = sale.cart.map(cartItem => {
+          // Buscar el producto actual en la BD
+          const dbProduct = currentProducts.find(p => 
+            p.id === cartItem.id || p.id === cartItem.product_id
+          );
+
+          if (!dbProduct) {
+            // Producto ya no existe o está inactivo
+            console.log(`⚠️ Producto ${cartItem.name} ya no está disponible, será eliminado del carrito`);
+            hasChanges = true;
+            return null;
+          }
+
+          const dbPrice = String(dbProduct.sale_price);
+          const cartPrice = String(cartItem.sale_price);
+
+          if (dbPrice !== cartPrice) {
+            console.log(`🔄 Actualizando precio de ${cartItem.name}: $${cartPrice} → $${dbPrice}`);
+            hasChanges = true;
+            return {
+              ...cartItem,
+              sale_price: dbPrice
+            };
+          }
+
+          return cartItem;
+        }).filter(item => item !== null);
+
+        return { ...sale, cart: updatedCart };
+      });
+
+      if (hasChanges) {
+        console.log("✅ Precios sincronizados automáticamente");
+      }
+
+      return updatedSales;
+    });
+  }, []);
+
+  // ✅ CARGAR CARRITOS AL INICIAR
   useEffect(() => {
     const savedData = loadFromLocalStorage();
   
     if (savedData) {
-     setSales(savedData.sales);
+      setSales(savedData.sales);
       setActiveSaleId(savedData.activeSaleId || 1);
       setNextSaleId(savedData.nextSaleId || 2);
     }
 
-   // 🔥 AGREGAR FUNCIÓN GLOBAL PARA VER BACKUP DE FORMA AMIGABLE
+    // Función global para ver backup
     window.verBackup = () => {
-     try {
+      try {
         const backup = localStorage.getItem("dynatos_sales_backup");
         if (!backup) {
-         console.log("❌ No hay backup disponible");
-         return;
-       }
+          console.log("❌ No hay backup disponible");
+          return;
+        }
 
         const data = JSON.parse(backup);
       
-       console.log("\n🛡️ ===== BACKUP DE CARRITOS =====");
-       console.log(`📅 Última actualización: ${new Date(data.lastUpdate).toLocaleString()}`);
-       console.log(`🛒 Total de ventas: ${data.sales.length}\n`);
+        console.log("\n🛡️ ===== BACKUP DE CARRITOS =====");
+        console.log(`📅 Última actualización: ${new Date(data.lastUpdate).toLocaleString()}`);
+        console.log(`🛒 Total de ventas: ${data.sales.length}\n`);
 
-       data.sales.forEach((sale, idx) => {
-         console.log(`\n📦 VENTA #${sale.id} ${sale.customName ? `- "${sale.customName}"` : ""}`);
+        data.sales.forEach((sale) => {
+          console.log(`\n📦 VENTA #${sale.id} ${sale.customName ? `- "${sale.customName}"` : ""}`);
         
-         if (sale.cart.length === 0) {
-           console.log("   └─ Carrito vacío");
-         } else {
+          if (sale.cart.length === 0) {
+            console.log("   └─ Carrito vacío");
+          } else {
             console.log(`   └─ Productos en carrito (${sale.cart.length}):`);
             sale.cart.forEach((item, i) => {
               const total = item.qty * parseFloat(item.sale_price);
@@ -171,21 +208,18 @@ export default function Venta({ cashDrawer, onCashClosed }) {
               console.log(`\n   💰 TOTAL: $${sale.preview.total.toLocaleString()}`);
             }
           }
-       });
+        });
 
         console.log("\n=====================================\n");
-       console.log("💡 Tip: Para ver el JSON completo escribe: JSON.parse(localStorage.getItem('dynatos_sales_backup'))");
+        console.log("💡 Tip: Para ver el JSON completo escribe: JSON.parse(localStorage.getItem('dynatos_sales_backup'))");
       
-     } catch (error) {
-       console.error("❌ Error leyendo backup:", error);
-     }
+      } catch (error) {
+        console.error("❌ Error leyendo backup:", error);
+      }
     };
 
-  console.log("💡 Comando disponible: verBackup() - Muestra el backup de forma legible");
-
-}, [loadFromLocalStorage]);
-  
-  
+    console.log("💡 Comando disponible: verBackup() - Muestra el backup de forma legible");
+  }, [loadFromLocalStorage]);
 
   // ✅ GUARDAR AUTOMÁTICAMENTE CUANDO CAMBIAN LOS DATOS
   useEffect(() => {
@@ -199,7 +233,7 @@ export default function Venta({ cashDrawer, onCashClosed }) {
     saveToLocalStorage(dataToSave);
   }, [sales, activeSaleId, nextSaleId, saveToLocalStorage]);
 
-  // ✅ SISTEMA DE BACKUP AUTOMÁTICO (cada 10 segundos)
+  // ✅ SISTEMA DE BACKUP AUTOMÁTICO
   useEffect(() => {
     console.log("🛡️ Sistema de backup automático activado");
     
@@ -208,7 +242,6 @@ export default function Venta({ cashDrawer, onCashClosed }) {
       
       if (currentData) {
         try {
-          // Validar antes de hacer backup
           const parsed = JSON.parse(currentData);
           if (parsed.sales && Array.isArray(parsed.sales)) {
             localStorage.setItem("dynatos_sales_backup", currentData);
@@ -218,7 +251,7 @@ export default function Venta({ cashDrawer, onCashClosed }) {
           console.error("❌ Error creando backup:", error);
         }
       }
-    }, 10000); // Cada 10 segundos
+    }, 10000);
 
     return () => {
       clearInterval(backupInterval);
@@ -258,6 +291,7 @@ export default function Venta({ cashDrawer, onCashClosed }) {
     loadAll();
   }, []);
 
+  // 🔥 FUNCIÓN ACTUALIZADA: Cargar productos y sincronizar carritos
   const loadAll = async () => {
     try {
       const [catRes, prodRes] = await Promise.all([
@@ -265,7 +299,11 @@ export default function Venta({ cashDrawer, onCashClosed }) {
         api.get("/products")
       ]);
       setCategories(catRes.data?.items ?? []);
-      setProducts(prodRes.data?.items ?? []);
+      const loadedProducts = prodRes.data?.items ?? [];
+      setProducts(loadedProducts);
+
+      // 🔥 SINCRONIZAR PRECIOS AUTOMÁTICAMENTE
+      syncCartPrices(loadedProducts);
     } catch {
       console.error("Error datos");
     }
@@ -571,10 +609,8 @@ export default function Venta({ cashDrawer, onCashClosed }) {
 
   const closeSale = (saleId) => {
     if (sales.length === 1) {
-      // Si solo hay 1 venta, solo limpia el carrito pero NO elimina la venta
       clearCart();
     } else {
-      // Si hay múltiples ventas, elimina esta y cambia a otra
       setSales(prev => prev.filter(s => s.id !== saleId));
       if (activeSaleId === saleId) {
         const remaining = sales.filter(s => s.id !== saleId);
@@ -726,7 +762,6 @@ export default function Venta({ cashDrawer, onCashClosed }) {
       alert("Error al imprimir");
     }
 
-    // ✅ SOLO LIMPIA EL CARRITO, NUNCA BORRA LOCALSTORAGE
     setTimeout(() => {
       closeSale(activeSaleId);
       loadAll();
