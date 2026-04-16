@@ -1,11 +1,11 @@
 import { useEffect, useState, useRef } from "react";
-import { useNavigate } from "react-router-dom"; // ✅ AGREGADO
+import { useNavigate } from "react-router-dom";
 import api from "../api/api"; 
-import { FiPlus, FiEdit, FiTrash2, FiSearch, FiX, FiTrendingUp, FiPackage, FiGrid } from "react-icons/fi";
+import { FiPlus, FiEdit, FiTrash2, FiSearch, FiX, FiTrendingUp, FiPackage, FiGrid, FiAlertCircle } from "react-icons/fi";
 import { FaBarcode } from "react-icons/fa"; 
 
 export default function AdminProducts() {
-  const navigate = useNavigate(); // ✅ AGREGADO
+  const navigate = useNavigate();
   
   const [products, setProducts] = useState([]);
   const [allProducts, setAllProducts] = useState([]);
@@ -15,6 +15,11 @@ export default function AdminProducts() {
   const [selectedCategory, setSelectedCategory] = useState(null);
   const [showModal, setShowModal] = useState(false);
   const [isEditing, setIsEditing] = useState(false);
+
+  // 🆕 Estado para modal de confirmación de eliminación
+  const [showDeleteModal, setShowDeleteModal] = useState(false);
+  const [productToDelete, setProductToDelete] = useState(null);
+  const [deleteError, setDeleteError] = useState(null);
 
   const barcodeInputRef = useRef(null);
 
@@ -181,15 +186,56 @@ export default function AdminProducts() {
     }
   };
 
-  const handleDelete = async (id) => {
-    if(!window.confirm("¿Estás seguro de que deseas eliminar este producto de forma permanente?")) return;
+  // 🔧 NUEVA FUNCIÓN: Abrir modal de eliminación
+  const handleDeleteClick = (product) => {
+    setProductToDelete(product);
+    setDeleteError(null);
+    setShowDeleteModal(true);
+  };
+
+  // 🔧 NUEVA FUNCIÓN: Intentar eliminación definitiva
+  const handleDeleteHard = async () => {
+    if (!productToDelete) return;
+
     try {
-      await api.delete(`/products/${id}/hard`);
-      alert("Producto eliminado correctamente");
+      await api.delete(`/products/${productToDelete.id}/hard`);
+      alert("✅ Producto eliminado definitivamente");
+      setShowDeleteModal(false);
+      setProductToDelete(null);
       loadProducts();
     } catch (error) {
       console.error("Error al eliminar:", error);
-      alert("No se pudo eliminar el producto.");
+      
+      // Capturar el mensaje de error del backend
+      const errorData = error.response?.data;
+      
+      if (error.response?.status === 400) {
+        // El producto tiene ventas - mostrar opción de soft delete
+        setDeleteError({
+          message: errorData?.message || "No se puede eliminar este producto",
+          recommendation: errorData?.recommendation,
+          sales_count: errorData?.sales_count
+        });
+      } else {
+        alert("Error al eliminar el producto. Inténtalo de nuevo.");
+        setShowDeleteModal(false);
+      }
+    }
+  };
+
+  // 🔧 NUEVA FUNCIÓN: Marcar como inactivo (soft delete)
+  const handleDeleteSoft = async () => {
+    if (!productToDelete) return;
+
+    try {
+      const res = await api.delete(`/products/${productToDelete.id}/soft`);
+      alert(`✅ ${res.data.message}\n\nEl producto ya no aparecerá en el POS pero se preserva el historial de ventas.`);
+      setShowDeleteModal(false);
+      setProductToDelete(null);
+      loadProducts();
+    } catch (error) {
+      console.error("Error al marcar como inactivo:", error);
+      alert("Error al marcar el producto como inactivo.");
     }
   };
 
@@ -336,7 +382,6 @@ export default function AdminProducts() {
                     </span>
                   </td>
                   <td style={{ padding: "20px", textAlign: "center" }}>
-                    {/* ✅ BOTÓN DE PRESENTACIONES (NUEVO) */}
                     <button 
                       onClick={() => navigate(`/admin/productos/${p.id}/presentations`)} 
                       style={{ background: "none", border: "none", cursor: "pointer", marginRight: "15px" }}
@@ -349,7 +394,8 @@ export default function AdminProducts() {
                       <FiEdit color="#D4AF37" size={20} />
                     </button>
                     
-                    <button onClick={() => handleDelete(p.id)} style={{ background: "none", border: "none", cursor: "pointer" }}>
+                    {/* 🔧 BOTÓN ACTUALIZADO */}
+                    <button onClick={() => handleDeleteClick(p)} style={{ background: "none", border: "none", cursor: "pointer" }}>
                       <FiTrash2 color="#ff4444" size={20} />
                     </button>
                   </td>
@@ -360,7 +406,7 @@ export default function AdminProducts() {
         </table>
       </div>
 
-      {/* MODAL */}
+      {/* MODAL DE PRODUCTO (CREATE/EDIT) */}
       {showModal && (
         <div style={{ position: "fixed", top: 0, left: 0, width: "100%", height: "100%", background: "rgba(0,0,0,0.85)", display: "flex", justifyContent: "center", alignItems: "center", zIndex: 1000, backdropFilter: "blur(10px)" }}>
           <div style={{ background: "#0a0a0a", width: "550px", maxHeight: "90vh", overflowY: "auto", padding: "40px", borderRadius: "30px", border: "1px solid #D4AF37" }}>
@@ -486,6 +532,92 @@ export default function AdminProducts() {
               </button>
 
             </form>
+          </div>
+        </div>
+      )}
+
+      {/* 🆕 MODAL DE ELIMINACIÓN */}
+      {showDeleteModal && productToDelete && (
+        <div style={{ position: "fixed", top: 0, left: 0, width: "100%", height: "100%", background: "rgba(0,0,0,0.9)", display: "flex", justifyContent: "center", alignItems: "center", zIndex: 2000, backdropFilter: "blur(10px)" }}>
+          <div style={{ background: "#0a0a0a", width: "500px", padding: "40px", borderRadius: "25px", border: "2px solid #ff4444" }}>
+            
+            <div style={{ display: "flex", alignItems: "center", gap: "15px", marginBottom: "25px" }}>
+              <FiAlertCircle size={40} color="#ff4444" />
+              <h2 style={{ margin: 0, color: "#ff4444", fontSize: "1.5rem" }}>ELIMINAR PRODUCTO</h2>
+            </div>
+
+            <div style={{ marginBottom: "30px" }}>
+              <p style={{ color: "#fff", fontSize: "1.1rem", marginBottom: "10px" }}>
+                <strong>{productToDelete.name}</strong>
+              </p>
+              <p style={{ color: "#888", fontSize: "0.9rem" }}>
+                Código: {productToDelete.barcode || "Sin código"}
+              </p>
+            </div>
+
+            {!deleteError ? (
+              <>
+                <p style={{ color: "#ccc", marginBottom: "30px", lineHeight: "1.6" }}>
+                  ¿Estás seguro de que deseas <strong>eliminar definitivamente</strong> este producto?
+                </p>
+
+                <div style={{ display: "flex", gap: "12px" }}>
+                  <button 
+                    onClick={() => {
+                      setShowDeleteModal(false);
+                      setProductToDelete(null);
+                    }}
+                    style={{ flex: 1, padding: "14px", background: "#222", color: "#fff", border: "1px solid #444", borderRadius: "12px", fontWeight: "bold", cursor: "pointer" }}
+                  >
+                    CANCELAR
+                  </button>
+                  <button 
+                    onClick={handleDeleteHard}
+                    style={{ flex: 1, padding: "14px", background: "#ff4444", color: "#fff", border: "none", borderRadius: "12px", fontWeight: "bold", cursor: "pointer" }}
+                  >
+                    SÍ, ELIMINAR
+                  </button>
+                </div>
+              </>
+            ) : (
+              <>
+                <div style={{ padding: "20px", background: "#1a0000", border: "1px solid #ff4444", borderRadius: "12px", marginBottom: "25px" }}>
+                  <p style={{ color: "#ff6666", marginBottom: "15px", lineHeight: "1.6" }}>
+                    <strong>{deleteError.message}</strong>
+                  </p>
+                  
+                  {deleteError.sales_count && (
+                    <p style={{ color: "#888", fontSize: "0.9rem", marginBottom: "15px" }}>
+                      Este producto tiene <strong>{deleteError.sales_count}</strong> venta(s) registrada(s).
+                    </p>
+                  )}
+
+                  <p style={{ color: "#aaa", fontSize: "0.95rem", lineHeight: "1.5" }}>
+                    {deleteError.recommendation}
+                  </p>
+                </div>
+
+                <div style={{ display: "flex", gap: "12px" }}>
+                  <button 
+                    onClick={() => {
+                      setShowDeleteModal(false);
+                      setProductToDelete(null);
+                      setDeleteError(null);
+                    }}
+                    style={{ flex: 1, padding: "14px", background: "#222", color: "#fff", border: "1px solid #444", borderRadius: "12px", fontWeight: "bold", cursor: "pointer" }}
+                  >
+                    CANCELAR
+                  </button>
+                  <button 
+                    onClick={handleDeleteSoft}
+                    style={{ flex: 1, padding: "14px", background: "#D4AF37", color: "#000", border: "none", borderRadius: "12px", fontWeight: "bold", cursor: "pointer" }}
+                  >
+                    MARCAR COMO INACTIVO
+                  </button>
+                </div>
+              </>
+            )}
+
           </div>
         </div>
       )}
