@@ -128,18 +128,13 @@ export default function Venta({ cashDrawer, onCashClosed }) {
       let hasChanges = false;
       const updatedSales = prevSales.map(sale => {
         const updatedCart = sale.cart.map(cartItem => {
-          // 🔥 REGLA 1: Si es presentación, NO sincronizar
-          // Las presentaciones tienen su propio precio independiente
           if (cartItem.is_presentation) {
             return cartItem;
           }
 
-          // 🔥 REGLA 2: Buscar solo por ID exacto (productos normales)
           const dbProduct = currentProducts.find(p => p.id === cartItem.id);
 
           if (!dbProduct) {
-            // 🔥 REGLA 3: Producto no encontrado (inactivo o eliminado)
-            // NO eliminar del carrito - mantener como está
             console.log(`⚠️ Producto ${cartItem.name} no encontrado en BD, manteniendo precio actual`);
             return cartItem;
           }
@@ -147,7 +142,6 @@ export default function Venta({ cashDrawer, onCashClosed }) {
           const dbPrice = String(dbProduct.sale_price);
           const cartPrice = String(cartItem.sale_price);
 
-          // Solo sincronizar si el precio cambió
           if (dbPrice !== cartPrice) {
             console.log(`🔄 Actualizando precio de ${cartItem.name}: $${cartPrice} → $${dbPrice}`);
             hasChanges = true;
@@ -159,7 +153,6 @@ export default function Venta({ cashDrawer, onCashClosed }) {
 
           return cartItem;
         });
-        // ✅ NO filtrar - mantener todos los productos
 
         return { ...sale, cart: updatedCart };
       });
@@ -182,7 +175,6 @@ export default function Venta({ cashDrawer, onCashClosed }) {
       setNextSaleId(savedData.nextSaleId || 2);
     }
 
-    // Función global para ver backup
     window.verBackup = () => {
       try {
         const backup = localStorage.getItem("dynatos_sales_backup");
@@ -308,12 +300,46 @@ export default function Venta({ cashDrawer, onCashClosed }) {
       const loadedProducts = prodRes.data?.items ?? [];
       setProducts(loadedProducts);
 
-      // 🔥 SINCRONIZAR PRECIOS AUTOMÁTICAMENTE
       syncCartPrices(loadedProducts);
     } catch {
       console.error("Error datos");
     }
   };
+
+  // 🔥 REFRESH PERIÓDICO DE PRODUCTOS (cada 60s) - RED DE SEGURIDAD
+  useEffect(() => {
+    console.log("🔄 Auto-refresh de productos activado (cada 60s)");
+
+    const refreshInterval = setInterval(async () => {
+      try {
+        const prodRes = await api.get("/products");
+        const freshProducts = prodRes.data?.items ?? [];
+        setProducts(freshProducts);
+        syncCartPrices(freshProducts);
+        console.log("🔄 Productos refrescados -", new Date().toLocaleTimeString());
+      } catch {
+        console.warn("⚠️ Error refrescando productos");
+      }
+    }, 60000);
+
+    return () => {
+      clearInterval(refreshInterval);
+      console.log("🔄 Auto-refresh de productos desactivado");
+    };
+  }, [syncCartPrices]);
+
+  // 🔥 HELPER: Obtener datos FRESCOS de un producto desde la API
+  const fetchFreshProduct = useCallback(async (productId) => {
+    try {
+      const res = await api.get("/products");
+      const allProducts = res.data?.items ?? [];
+      setProducts(allProducts); // Actualizar state como efecto secundario
+      return allProducts.find(p => p.id === productId) || null;
+    } catch {
+      console.warn("⚠️ No se pudo obtener producto fresco, usando datos en caché");
+      return null;
+    }
+  }, []);
 
   const filteredProducts = useMemo(() => {
     let filtered = selectedCategory === "ALL" 
@@ -402,29 +428,42 @@ export default function Venta({ cashDrawer, onCashClosed }) {
     setCurrentProductPresentations(null);
   }, [activeSaleId]);
 
+  // 🔥 addProduct CORREGIDO: siempre obtiene datos frescos de la API
   const addProduct = useCallback(async (p) => {
     if (getAvailableStock(p) <= 0) return;
 
+    // 🔥 PASO 1: Obtener datos FRESCOS del producto desde la API
+    const freshProduct = await fetchFreshProduct(p.id);
+    const productToUse = freshProduct || p; // Fallback a datos en caché si falla
+
+    if (freshProduct && String(freshProduct.sale_price) !== String(p.sale_price)) {
+      console.log(`🔄 Precio actualizado para ${p.name}: $${p.sale_price} → $${freshProduct.sale_price}`);
+    }
+
     try {
-      const res = await api.get(`/presentations/${p.id}/presentations`);
+      const res = await api.get(`/presentations/${productToUse.id}/presentations`);
       const presentations = res.data.items || [];
 
       if (presentations.length === 0) {
+        // 🔥 Usa productToUse (FRESCO) en lugar de p (posiblemente viejo)
         setSales(prevSales => {
           const currentSale = prevSales.find(s => s.id === activeSaleId);
           if (!currentSale) return prevSales;
 
-          const found = currentSale.cart.find((item) => item.id === p.id && !item.is_presentation);
+          const found = currentSale.cart.find((item) => item.id === productToUse.id && !item.is_presentation);
           let newCart;
           
           if (found) {
+            // 🔥 Al sumar cantidad, TAMBIÉN actualizar el precio por si cambió
             newCart = currentSale.cart.map((item) =>
-              item.id === p.id && !item.is_presentation ? { ...item, qty: item.qty + 1 } : item
+              item.id === productToUse.id && !item.is_presentation 
+                ? { ...item, qty: item.qty + 1, sale_price: productToUse.sale_price } 
+                : item
             );
           } else {
             newCart = [...currentSale.cart, { 
-              ...p, 
-              cart_id: `prod-${p.id}-${Date.now()}`,
+              ...productToUse, 
+              cart_id: `prod-${productToUse.id}-${Date.now()}`,
               qty: 1, 
               is_presentation: false 
             }];
@@ -437,21 +476,21 @@ export default function Venta({ cashDrawer, onCashClosed }) {
       } else if (presentations.length === 1) {
         const pres = presentations[0];
         addPresentationToCart(
-          p.id,
-          p.name,
+          productToUse.id,
+          productToUse.name,
           pres.id,
           pres.name,
           pres.quantity,
           pres.sale_price,
-          p.current_stock
+          productToUse.current_stock
         );
       } else {
         setCurrentProductPresentations({
-          product_id: p.id,
-          product_name: p.name,
-          base_stock: p.current_stock,
-          cost_price: p.cost_price,
-          image_filename: p.image_filename,
+          product_id: productToUse.id,
+          product_name: productToUse.name,
+          base_stock: productToUse.current_stock,
+          cost_price: productToUse.cost_price,
+          image_filename: productToUse.image_filename,
           single_presentation: false,
           presentations: presentations.map(pr => ({
             id: pr.id,
@@ -464,21 +503,24 @@ export default function Venta({ cashDrawer, onCashClosed }) {
       }
     } catch (error) {
       console.log("No se encontraron presentaciones, agregando como producto normal");
+      // 🔥 Usa productToUse (FRESCO) en el catch también
       setSales(prevSales => {
         const currentSale = prevSales.find(s => s.id === activeSaleId);
         if (!currentSale) return prevSales;
 
-        const found = currentSale.cart.find((item) => item.id === p.id && !item.is_presentation);
+        const found = currentSale.cart.find((item) => item.id === productToUse.id && !item.is_presentation);
         let newCart;
         
         if (found) {
           newCart = currentSale.cart.map((item) =>
-            item.id === p.id && !item.is_presentation ? { ...item, qty: item.qty + 1 } : item
+            item.id === productToUse.id && !item.is_presentation 
+              ? { ...item, qty: item.qty + 1, sale_price: productToUse.sale_price } 
+              : item
           );
         } else {
           newCart = [...currentSale.cart, { 
-            ...p, 
-            cart_id: `prod-${p.id}-${Date.now()}`,
+            ...productToUse, 
+            cart_id: `prod-${productToUse.id}-${Date.now()}`,
             qty: 1, 
             is_presentation: false 
           }];
@@ -489,14 +531,16 @@ export default function Venta({ cashDrawer, onCashClosed }) {
         );
       });
     }
-  }, [activeSaleId, getAvailableStock, addPresentationToCart]);
+  }, [activeSaleId, getAvailableStock, addPresentationToCart, fetchFreshProduct]);
 
+  // 🔥 BARCODE SCANNER - Ahora el fallback también usa datos frescos
   useEffect(() => {
     const handleBarcodeScan = async (codeRaw) => {
       const code = String(codeRaw || "").trim();
       if (!code) return;
 
       try {
+        // Intento 1: Buscar por presentaciones (datos siempre frescos de la API)
         const res = await api.get(`/presentations/search?q=${code}`);
         const data = res.data;
 
@@ -515,13 +559,38 @@ export default function Venta({ cashDrawer, onCashClosed }) {
           setShowPresentationsModal(true);
         }
       } catch (error) {
-        console.log("🔎 Código no encontrado:", code);
-        const found =
-          products.find((p) => String(p.barcode || "").trim() === code) ||
-          products.find((p) => String(p.sku || "").trim() === code);
+        // 🔥 Intento 2: Buscar como producto normal CON DATOS FRESCOS
+        console.log("🔎 No encontrado en presentaciones, buscando en productos...");
 
-        if (found) {
-          addProduct(found);
+        try {
+          // Obtener lista FRESCA de productos desde la API
+          const prodRes = await api.get("/products");
+          const freshProducts = prodRes.data?.items ?? [];
+          setProducts(freshProducts); // Actualizar state
+
+          const found =
+            freshProducts.find((p) => String(p.barcode || "").trim() === code) ||
+            freshProducts.find((p) => String(p.sku || "").trim() === code);
+
+          if (found) {
+            // addProduct ya usa fetchFreshProduct internamente,
+            // pero como acabamos de refrescar, el producto ya tiene datos frescos
+            addProduct(found);
+          } else {
+            console.log("❌ Código no encontrado en ninguna parte:", code);
+          }
+        } catch (fetchError) {
+          // Último recurso: usar array en caché
+          console.warn("⚠️ Error obteniendo productos frescos, usando caché");
+          const found =
+            products.find((p) => String(p.barcode || "").trim() === code) ||
+            products.find((p) => String(p.sku || "").trim() === code);
+
+          if (found) {
+            addProduct(found);
+          } else {
+            console.log("❌ Código no encontrado:", code);
+          }
         }
       }
     };
