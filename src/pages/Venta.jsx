@@ -122,27 +122,32 @@ export default function Venta({ cashDrawer, onCashClosed }) {
     }
   }, []);
 
-  // 🔥 NUEVA FUNCIÓN: Sincronizar precios del carrito con la base de datos
+  // 🔥 FUNCIÓN CORREGIDA: Sincronizar precios SOLO de productos normales activos
   const syncCartPrices = useCallback((currentProducts) => {
     setSales(prevSales => {
       let hasChanges = false;
       const updatedSales = prevSales.map(sale => {
         const updatedCart = sale.cart.map(cartItem => {
-          // Buscar el producto actual en la BD
-          const dbProduct = currentProducts.find(p => 
-            p.id === cartItem.id || p.id === cartItem.product_id
-          );
+          // 🔥 REGLA 1: Si es presentación, NO sincronizar
+          // Las presentaciones tienen su propio precio independiente
+          if (cartItem.is_presentation) {
+            return cartItem;
+          }
+
+          // 🔥 REGLA 2: Buscar solo por ID exacto (productos normales)
+          const dbProduct = currentProducts.find(p => p.id === cartItem.id);
 
           if (!dbProduct) {
-            // Producto ya no existe o está inactivo
-            console.log(`⚠️ Producto ${cartItem.name} ya no está disponible, será eliminado del carrito`);
-            hasChanges = true;
-            return null;
+            // 🔥 REGLA 3: Producto no encontrado (inactivo o eliminado)
+            // NO eliminar del carrito - mantener como está
+            console.log(`⚠️ Producto ${cartItem.name} no encontrado en BD, manteniendo precio actual`);
+            return cartItem;
           }
 
           const dbPrice = String(dbProduct.sale_price);
           const cartPrice = String(cartItem.sale_price);
 
+          // Solo sincronizar si el precio cambió
           if (dbPrice !== cartPrice) {
             console.log(`🔄 Actualizando precio de ${cartItem.name}: $${cartPrice} → $${dbPrice}`);
             hasChanges = true;
@@ -153,7 +158,8 @@ export default function Venta({ cashDrawer, onCashClosed }) {
           }
 
           return cartItem;
-        }).filter(item => item !== null);
+        });
+        // ✅ NO filtrar - mantener todos los productos
 
         return { ...sale, cart: updatedCart };
       });
