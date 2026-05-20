@@ -1,5 +1,5 @@
 import { useEffect, useState } from "react";
-import api from "../api/api";
+import api, { logoutSeguro } from "../api/api";
 import AbrirCaja from "./AbrirCaja";
 import Venta from "./Venta";
 import AdminAuthModal from "../components/AdminAuthModal";
@@ -31,8 +31,7 @@ export default function Caja() {
 
   const logout = () => {
     if (cashDrawer) return;
-    localStorage.clear();
-    window.location.assign("/login");
+    logoutSeguro();
   };
 
   if (loading) {

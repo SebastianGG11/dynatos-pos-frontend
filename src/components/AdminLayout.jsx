@@ -1,6 +1,7 @@
 import { Outlet, Navigate, useLocation } from "react-router-dom";
 import AdminSidebar from "./AdminSidebar";
 import { FiLogOut } from "react-icons/fi";
+import { logoutSeguro } from "../api/api";
 
 export default function AdminLayout() {
   const user = JSON.parse(localStorage.getItem("user") || "null");
@@ -11,8 +12,7 @@ export default function AdminLayout() {
   }
 
   const handleLogout = () => {
-    localStorage.clear();
-    window.location.href = "/login";
+    logoutSeguro();
   };
 
   return (

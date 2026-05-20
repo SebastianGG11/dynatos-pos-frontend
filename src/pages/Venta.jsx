@@ -73,6 +73,14 @@ export default function Venta({ cashDrawer, onCashClosed }) {
       }
 
       const totalProducts = data.sales.reduce((sum, s) => sum + (s.cart?.length || 0), 0);
+
+      // 🚨 GUARDIA CRÍTICA: sales nunca debería ser [] — indica un bug grave
+      if (data.sales.length === 0) {
+        console.error("🚨 CRÍTICO: Intentando guardar 0 ventas en localStorage. Abortando para proteger datos.");
+        console.trace("Origen del guardado con 0 ventas:");
+        return false;
+      }
+
       const jsonString = JSON.stringify(data);
       localStorage.setItem("dynatos_sales", jsonString);
       console.log(`💾 Guardando: ${data.sales.length} venta(s) con ${totalProducts} productos totales - ${new Date().toLocaleTimeString()}`);
@@ -324,7 +332,7 @@ export default function Venta({ cashDrawer, onCashClosed }) {
     
     const keepSessionAlive = setInterval(async () => {
       try {
-        await api.get("/categories");
+        await api.get("/categories", { __skipAuthRedirect: true });
         console.log("✅ Sesión renovada -", new Date().toLocaleTimeString());
       } catch (error) {
         console.warn("⚠️ Error renovando sesión, reintentando...");
@@ -373,7 +381,7 @@ export default function Venta({ cashDrawer, onCashClosed }) {
 
     const refreshInterval = setInterval(async () => {
       try {
-        const prodRes = await api.get("/products");
+        const prodRes = await api.get("/products", { __skipAuthRedirect: true });
         const freshProducts = prodRes.data?.items ?? [];
         setProducts(freshProducts);
         syncCartPrices(freshProducts);
@@ -760,17 +768,33 @@ export default function Venta({ cashDrawer, onCashClosed }) {
     setNextSaleId(prev => prev + 1);
   };
 
-  const closeSale = (saleId) => {
-    if (sales.length === 1) {
-      clearCart();
-    } else {
-      setSales(prev => prev.filter(s => s.id !== saleId));
-      if (activeSaleId === saleId) {
-        const remaining = sales.filter(s => s.id !== saleId);
-        setActiveSaleId(remaining[0].id);
+  const closeSale = useCallback((saleId) => {
+    setSales(prev => {
+      // Guard: si la venta ya no existe, no hacer nada
+      if (!prev.some(s => s.id === saleId)) return prev;
+
+      if (prev.length === 1) {
+        // Última venta: limpiar carrito pero NO eliminar el objeto venta
+        // (eliminar devolvería [] y se perdería todo al guardar en localStorage)
+        console.log(`🛡️ closeSale(${saleId}): última venta, limpiando carrito sin eliminar`);
+        return prev.map(s => s.id === saleId ? {
+          ...s, cart: [], sale: null, preview: null,
+          cashReceived: "", isCustomClient: false, clientName: "", clientDoc: ""
+        } : s);
       }
+
+      console.log(`🗂️ closeSale(${saleId}): eliminando venta de ${prev.length} ventas`);
+      return prev.filter(s => s.id !== saleId);
+    });
+  }, []);
+
+  // Garantizar que activeSaleId siempre apunte a una venta existente
+  useEffect(() => {
+    if (sales.length > 0 && !sales.some(s => s.id === activeSaleId)) {
+      console.log(`🔄 Venta activa ${activeSaleId} ya no existe, cambiando a ${sales[0].id}`);
+      setActiveSaleId(sales[0].id);
     }
-  };
+  }, [sales, activeSaleId]);
 
   const editSaleName = (saleId) => {
     const sale = sales.find(s => s.id === saleId);
